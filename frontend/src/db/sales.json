@@ -1,0 +1,163 @@
+[
+  {
+    "id": 1,
+    "ref": "SALE-2026025",
+    "date": "01 Oct 2026",
+    "dueDate": "15 Oct 2026",
+    "customerId": "CUST-001",
+    "customerName": "John Smith",
+    "status": "PARTIAL",
+    "subtotal": 19750,
+    "discount": 0,
+    "tax": 0,
+    "total": 19750,
+    "received": 10115,
+    "balance": 9635,
+    "products": [
+      { "id": 101, "name": "Premium Support Plan", "qty": 1, "price": 15000, "total": 15000 },
+      { "id": 102, "name": "Consulting Hours", "qty": 5, "price": 950, "total": 4750 }
+    ],
+    "payments": [
+      { "id": 1, "date": "05 Oct 2026", "method": "Bank Transfer", "ref": "PAY-045", "amount": 10115 }
+    ]
+  },
+  {
+    "id": 2,
+    "ref": "SALE-2026024",
+    "date": "02 Oct 2026",
+    "dueDate": "16 Oct 2026",
+    "customerId": "CUST-002",
+    "customerName": "Sarah Johnson",
+    "status": "PAID",
+    "subtotal": 53464,
+    "discount": 0,
+    "tax": 0,
+    "total": 53464,
+    "received": 53464,
+    "balance": 0,
+    "products": [
+      { "id": 201, "name": "Enterprise Software License", "qty": 2, "price": 25000, "total": 50000 },
+      { "id": 202, "name": "Setup & Implementation", "qty": 1, "price": 3464, "total": 3464 }
+    ],
+    "payments": [
+      { "id": 2, "date": "10 Oct 2026", "method": "Credit Card", "ref": "PAY-042", "amount": 53464 }
+    ]
+  },
+  {
+    "id": 3,
+    "ref": "SALE-2026023",
+    "date": "05 Oct 2026",
+    "dueDate": "19 Oct 2026",
+    "customerId": "CUST-004",
+    "customerName": "Priya Sharma",
+    "status": "OVERDUE",
+    "subtotal": 37187,
+    "discount": 0,
+    "tax": 0,
+    "total": 37187,
+    "received": 0,
+    "balance": 37187,
+    "products": [
+      { "id": 301, "name": "Marketing Materials Design", "qty": 1, "price": 20000, "total": 20000 },
+      { "id": 302, "name": "Social Media Campaign (Oct)", "qty": 1, "price": 17187, "total": 17187 }
+    ],
+    "payments": []
+  },
+  {
+    "id": 4,
+    "ref": "SALE-2026022",
+    "date": "10 Oct 2026",
+    "dueDate": "24 Oct 2026",
+    "customerId": "CUST-001",
+    "customerName": "John Smith",
+    "status": "PAID",
+    "subtotal": 15000,
+    "discount": 1000,
+    "tax": 0,
+    "total": 14000,
+    "received": 14000,
+    "balance": 0,
+    "products": [
+      { "id": 401, "name": "Website Maintenance", "qty": 1, "price": 15000, "total": 15000 }
+    ],
+    "payments": [
+      { "id": 3, "date": "12 Oct 2026", "method": "Cash", "ref": "PAY-031", "amount": 14000 }
+    ]
+  },
+  {
+    "id": 5,
+    "ref": "SALE-2026026",
+    "date": "08 Oct 2026",
+    "dueDate": "22 Oct 2026",
+    "customerId": "CUST-002",
+    "customerName": "Sarah Johnson",
+    "status": "UNPAID",
+    "subtotal": 12500,
+    "discount": 0,
+    "tax": 0,
+    "total": 12500,
+    "received": 0,
+    "balance": 12500,
+    "products": [
+      { "id": 501, "name": "Annual Server Hosting", "qty": 1, "price": 12500, "total": 12500 }
+    ],
+    "payments": []
+  },
+  {
+    "id": 6,
+    "ref": "SALE-2026027",
+    "date": "09 Oct 2026",
+    "dueDate": "23 Oct 2026",
+    "customerId": "CUST-003",
+    "customerName": "Michael Chen",
+    "status": "DRAFT",
+    "subtotal": 8500,
+    "discount": 0,
+    "tax": 0,
+    "total": 8500,
+    "received": 0,
+    "balance": 8500,
+    "products": [
+      { "id": 601, "name": "SEO Optimization Services", "qty": 1, "price": 8500, "total": 8500 }
+    ],
+    "payments": []
+  },
+  {
+    "id": 7,
+    "ref": "SALE-2026028",
+    "date": "10 Oct 2026",
+    "dueDate": "24 Oct 2026",
+    "customerId": "CUST-005",
+    "customerName": "David Wilson",
+    "status": "VOID",
+    "subtotal": 45000,
+    "discount": 0,
+    "tax": 0,
+    "total": 45000,
+    "received": 0,
+    "balance": 0,
+    "products": [
+      { "id": 701, "name": "Warehouse Inventory System", "qty": 1, "price": 45000, "total": 45000 }
+    ],
+    "payments": []
+  },
+  {
+    "id": 8,
+    "ref": "SALE-2026029",
+    "date": "11 Oct 2026",
+    "dueDate": "25 Oct 2026",
+    "customerId": "CUST-004",
+    "customerName": "Priya Sharma",
+    "status": "CANCELLED",
+    "subtotal": 12000,
+    "discount": 0,
+    "tax": 0,
+    "total": 12000,
+    "received": 0,
+    "balance": 0,
+    "products": [
+      { "id": 801, "name": "Photography Session", "qty": 1, "price": 12000, "total": 12000 }
+    ],
+    "payments": []
+  }
+]

@@ -1,0 +1,102 @@
+[
+  {
+    "id": 1,
+    "supplierId": "SUP-001",
+    "ref": "PO-2026-001",
+    "date": "01 Oct 2026",
+    "total": 25000,
+    "paid": 10000,
+    "balance": 15000,
+    "status": "Partially Paid"
+  },
+  {
+    "id": 2,
+    "supplierId": "SUP-001",
+    "ref": "PO-2026-002",
+    "date": "15 Sep 2026",
+    "total": 5000,
+    "paid": 4500,
+    "balance": 500,
+    "status": "Partially Paid"
+  },
+  {
+    "id": 3,
+    "supplierId": "SUP-002",
+    "ref": "PO-2026-003",
+    "date": "10 Oct 2026",
+    "total": 12000,
+    "paid": 12000,
+    "balance": 0,
+    "status": "Paid"
+  },
+  {
+    "id": 4,
+    "supplierId": "SUP-004",
+    "ref": "PO-2026-004",
+    "date": "05 Oct 2026",
+    "total": 45000,
+    "paid": 0,
+    "balance": 45000,
+    "status": "Pending"
+  },
+  {
+    "id": 5,
+    "supplierId": "SUP-005",
+    "ref": "PO-2026-005",
+    "date": "12 Oct 2026",
+    "total": 1200,
+    "paid": 0,
+    "balance": 1200,
+    "status": "Pending"
+  },
+  {
+    "id": 6,
+    "supplierId": "SUP-007",
+    "ref": "PO-2026-006",
+    "date": "08 Oct 2026",
+    "total": 850,
+    "paid": 500,
+    "balance": 350,
+    "status": "Partially Paid"
+  },
+  {
+    "id": 7,
+    "supplierId": "SUP-001",
+    "ref": "PO-2026-007",
+    "date": "20 Aug 2026",
+    "total": 35000,
+    "paid": 35000,
+    "balance": 0,
+    "status": "Paid"
+  },
+  {
+    "id": 8,
+    "supplierId": "SUP-004",
+    "ref": "PO-2026-008",
+    "date": "18 Oct 2026",
+    "total": 125000,
+    "paid": 50000,
+    "balance": 75000,
+    "status": "Partially Paid"
+  },
+  {
+    "id": 9,
+    "supplierId": "SUP-002",
+    "ref": "PO-2026-009",
+    "date": "02 Nov 2026",
+    "total": 8500,
+    "paid": 0,
+    "balance": 8500,
+    "status": "Pending"
+  },
+  {
+    "id": 10,
+    "supplierId": "SUP-008",
+    "ref": "PO-2026-010",
+    "date": "10 Nov 2026",
+    "total": 42000,
+    "paid": 42000,
+    "balance": 0,
+    "status": "Paid"
+  }
+]

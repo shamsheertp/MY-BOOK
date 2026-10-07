@@ -1,0 +1,68 @@
+[
+  {
+    "id": 1,
+    "customerId": "CUST-001",
+    "name": "John Smith",
+    "company": "ABC Trading LLC",
+    "email": "john.smith@abctrading.com",
+    "mobile": "+91 98765 43210",
+    "address": "123 Business Avenue, Tech District, 54321",
+    "gst": "27AAPCB2825G1Z9",
+    "totalSales": 165000.00,
+    "totalReceived": 130000.00,
+    "outstandingBalance": 35000.00,
+    "status": "Active"
+  },
+  {
+    "id": 2,
+    "customerId": "CUST-002",
+    "name": "Sarah Johnson",
+    "company": "Global Tech Solutions",
+    "email": "sarah.j@globaltech.com",
+    "mobile": "+91 91234 56789",
+    "address": "456 Innovation Park, Cyber City, 54322",
+    "totalSales": 250000.00,
+    "totalReceived": 250000.00,
+    "outstandingBalance": 0.00,
+    "status": "Active"
+  },
+  {
+    "id": 3,
+    "customerId": "CUST-003",
+    "name": "Michael Chen",
+    "company": "Chen Imports",
+    "email": "m.chen@chenimports.com",
+    "mobile": "+91 99887 76655",
+    "address": "789 Trade Center, Commerce Blvd, 54323",
+    "totalSales": 85000.00,
+    "totalReceived": 40000.00,
+    "outstandingBalance": 45000.00,
+    "status": "Inactive"
+  },
+  {
+    "id": 4,
+    "customerId": "CUST-004",
+    "name": "Priya Sharma",
+    "company": "Sharma Enterprises",
+    "email": "priya@sharmaent.in",
+    "mobile": "+91 98765 12345",
+    "address": "321 Market Square, Industrial Area, 54324",
+    "totalSales": 420000.00,
+    "totalReceived": 300000.00,
+    "outstandingBalance": 120000.00,
+    "status": "Active"
+  },
+  {
+    "id": 5,
+    "customerId": "CUST-005",
+    "name": "David Wilson",
+    "company": "Wilson Logistics",
+    "email": "david.w@wilsonlogistics.com",
+    "mobile": "+91 93344 55667",
+    "address": "555 Transport Hub, Cargo District, 54325",
+    "totalSales": 95000.00,
+    "totalReceived": 95000.00,
+    "outstandingBalance": 0.00,
+    "status": "Active"
+  }
+]

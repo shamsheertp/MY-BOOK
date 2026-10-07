@@ -1,0 +1,98 @@
+[
+  {
+    "id": 1,
+    "supplierId": "SUP-001",
+    "name": "Global Tech Hardware",
+    "contact": "Jane Doe",
+    "email": "jane@globaltech.com",
+    "phone": "+91 98765 00001",
+    "status": "Active",
+    "balance": 15500,
+    "lastPurchase": "15 Sep 2026",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=GT&backgroundColor=e0e7ff&textColor=4f46e5"
+  },
+  {
+    "id": 2,
+    "supplierId": "SUP-002",
+    "name": "Office Supplies Co.",
+    "contact": "Mark Smith",
+    "email": "mark@officesupplies.com",
+    "phone": "+91 98765 00002",
+    "status": "Active",
+    "balance": 0,
+    "lastPurchase": "10 Oct 2026",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=OS&backgroundColor=dcfce7&textColor=16a34a"
+  },
+  {
+    "id": 3,
+    "supplierId": "SUP-003",
+    "name": "Cloud Hosting Solutions",
+    "contact": "Sarah Connor",
+    "email": "sarah@cloudhosting.net",
+    "phone": "+91 98765 00003",
+    "status": "Inactive",
+    "balance": 0,
+    "lastPurchase": "01 Jan 2026",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=CH&backgroundColor=f3f4f6&textColor=4b5563"
+  },
+  {
+    "id": 4,
+    "supplierId": "SUP-004",
+    "name": "Creative Design Agency",
+    "contact": "Leo Barnes",
+    "email": "leo@creativeagency.co",
+    "phone": "+91 98765 00004",
+    "status": "Active",
+    "balance": 45000,
+    "lastPurchase": "05 Oct 2026",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=CD&backgroundColor=fef3c7&textColor=d97706"
+  },
+  {
+    "id": 5,
+    "supplierId": "SUP-005",
+    "name": "City Logistics",
+    "contact": "Mike Johnson",
+    "email": "mike@citylogistics.com",
+    "phone": "+91 98765 00005",
+    "status": "Active",
+    "balance": 1200,
+    "lastPurchase": "12 Oct 2026",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=CL&backgroundColor=e0f2fe&textColor=0284c7"
+  },
+  {
+    "id": 6,
+    "supplierId": "SUP-006",
+    "name": "Secure IT Services",
+    "contact": "Emily Davis",
+    "email": "emily@secureit.com",
+    "phone": "+91 98765 00006",
+    "status": "Active",
+    "balance": 0,
+    "lastPurchase": "20 Sep 2026",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=SI&backgroundColor=fee2e2&textColor=dc2626"
+  },
+  {
+    "id": 7,
+    "supplierId": "SUP-007",
+    "name": "ABC Printing",
+    "contact": "Tom Wilson",
+    "email": "tom@abcprinting.com",
+    "phone": "+91 98765 00007",
+    "status": "Active",
+    "balance": 350,
+    "lastPurchase": "08 Oct 2026",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=AP&backgroundColor=fce7f3&textColor=db2777"
+  },
+  {
+    "id": 8,
+    "supplierId": "SUP-008",
+    "name": "National Telecom",
+    "contact": "Lisa Brown",
+    "email": "lisa@nationaltelecom.com",
+    "phone": "+91 98765 00008",
+    "status": "Active",
+    "balance": 0,
+    "lastPurchase": "01 Oct 2026",
+    "avatar": "https://api.dicebear.com/7.x/initials/svg?seed=NT&backgroundColor=ede9fe&textColor=7c3aed"
+  }
+]
