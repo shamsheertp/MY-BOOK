@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { SalesHeader } from './components/SalesHeader';
 import { SalesFilters } from './components/SalesFilters';
 import { SalesTable } from './components/SalesTable';
@@ -17,12 +17,14 @@ export default function Sales() {
     return () => clearTimeout(timer);
   }, []);
 
-  const filteredSales = salesData.filter(sale => {
-    const matchesSearch = sale.ref.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          sale.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || sale.status.toUpperCase() === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredSales = useMemo(() => {
+    return salesData.filter(sale => {
+      const matchesSearch = sale.ref.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            sale.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'ALL' || sale.status.toUpperCase() === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [searchTerm, statusFilter]);
 
   useEffect(() => {
     setCurrentPage(1);

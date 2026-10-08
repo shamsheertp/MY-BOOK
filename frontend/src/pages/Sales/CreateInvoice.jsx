@@ -8,13 +8,13 @@ export default function CreateInvoice() {
   const navigate = useNavigate();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   
-  const [invoice, setInvoice] = useState({
+  const [invoice, setInvoice] = useState(() => ({
     customerId: '',
     ref: `SALE-${new Date().getFullYear()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
     date: new Date().toISOString().split('T')[0],
     dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     notes: ''
-  });
+  }));
 
   const [items, setItems] = useState([
     { id: 1, name: '', qty: 1, price: 0 }

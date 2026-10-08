@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Filter, ChevronLeft, ChevronRight, TrendingDown } from 'lucide-react';
 import expensesData from '../../../db/expenses.json';
 
 export function ExpensesReport() {
   const [isLoading, setIsLoading] = useState(true);
-  const [chartData, setChartData] = useState([]);
-  const [tableData, setTableData] = useState([]);
   const [dateRange, setDateRange] = useState('month'); 
   
   // Pagination
@@ -18,31 +16,33 @@ export function ExpensesReport() {
 
   useEffect(() => {
     setIsLoading(true);
-    // Simulate API fetch and data processing
-    setTimeout(() => {
-      // Process chart data (aggregate by category)
-      const aggregated = expensesData.reduce((acc, expense) => {
-        if (!acc[expense.category]) acc[expense.category] = 0;
-        acc[expense.category] += expense.amount;
-        return acc;
-      }, {});
-
-      const formattedChartData = Object.keys(aggregated).map(category => ({
-        name: category,
-        amount: aggregated[category]
-      })).sort((a, b) => b.amount - a.amount); // Sort by highest expense
-
-      setChartData(formattedChartData);
-      setTableData(expensesData);
+    const timer = setTimeout(() => {
       setIsLoading(false);
     }, 800);
+    return () => clearTimeout(timer);
   }, [dateRange]);
 
-  const totalPages = Math.ceil(tableData.length / itemsPerPage);
-  const paginatedData = tableData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const chartData = useMemo(() => {
+    const aggregated = expensesData.reduce((acc, expense) => {
+      if (!acc[expense.category]) acc[expense.category] = 0;
+      acc[expense.category] += expense.amount;
+      return acc;
+    }, {});
+
+    return Object.keys(aggregated).map(category => ({
+      name: category,
+      amount: aggregated[category]
+    })).sort((a, b) => b.amount - a.amount);
+  }, [dateRange]);
+
+  const totalPages = Math.ceil(expensesData.length / itemsPerPage);
+  
+  const paginatedData = useMemo(() => {
+    return expensesData.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [currentPage, itemsPerPage]);
 
   if (isLoading) {
     return (

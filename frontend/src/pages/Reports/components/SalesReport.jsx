@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
+import { useState, useEffect, useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Calendar, Filter, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import salesData from '../../../db/sales.json';
 
 export function SalesReport() {
   const [isLoading, setIsLoading] = useState(true);
-  const [chartData, setChartData] = useState([]);
-  const [tableData, setTableData] = useState([]);
   const [dateRange, setDateRange] = useState('month'); // 'week', 'month', 'year'
   
   // Pagination
@@ -15,33 +13,35 @@ export function SalesReport() {
 
   useEffect(() => {
     setIsLoading(true);
-    // Simulate API fetch and data processing
-    setTimeout(() => {
-      // Process chart data (aggregate by date)
-      const aggregated = salesData.reduce((acc, sale) => {
-        const dateObj = new Date(sale.date);
-        const dateStr = !isNaN(dateObj) ? dateObj.toISOString().split('T')[0] : sale.date;
-        if (!acc[dateStr]) acc[dateStr] = 0;
-        acc[dateStr] += (sale.total || 0);
-        return acc;
-      }, {});
-
-      const formattedChartData = Object.keys(aggregated).map(date => ({
-        date,
-        amount: aggregated[date]
-      })).sort((a, b) => new Date(a.date) - new Date(b.date));
-
-      setChartData(formattedChartData);
-      setTableData(salesData);
+    const timer = setTimeout(() => {
       setIsLoading(false);
     }, 800);
+    return () => clearTimeout(timer);
   }, [dateRange]);
 
-  const totalPages = Math.ceil(tableData.length / itemsPerPage);
-  const paginatedData = tableData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const chartData = useMemo(() => {
+    const aggregated = salesData.reduce((acc, sale) => {
+      const dateObj = new Date(sale.date);
+      const dateStr = !isNaN(dateObj) ? dateObj.toISOString().split('T')[0] : sale.date;
+      if (!acc[dateStr]) acc[dateStr] = 0;
+      acc[dateStr] += (sale.total || 0);
+      return acc;
+    }, {});
+
+    return Object.keys(aggregated).map(date => ({
+      date,
+      amount: aggregated[date]
+    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [salesData, dateRange]);
+
+  const totalPages = Math.ceil(salesData.length / itemsPerPage);
+  
+  const paginatedData = useMemo(() => {
+    return salesData.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [salesData, currentPage, itemsPerPage]);
 
   if (isLoading) {
     return (

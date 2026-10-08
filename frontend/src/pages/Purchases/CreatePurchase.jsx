@@ -9,13 +9,13 @@ export default function CreatePurchase() {
   const navigate = useNavigate();
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   
-  const [purchase, setPurchase] = useState({
+  const [purchase, setPurchase] = useState(() => ({
     supplierId: '',
     ref: `PO-${new Date().getFullYear()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
     date: new Date().toISOString().split('T')[0],
     expectedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     notes: ''
-  });
+  }));
 
   const [items, setItems] = useState([
     { id: 1, name: '', qty: 1, price: 0 }

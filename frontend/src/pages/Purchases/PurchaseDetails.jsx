@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Send, PackagePlus, FileText, CheckCircle2, AlertCircle, IndianRupee, Ban } from 'lucide-react';
+import { ArrowLeft, Printer, Send, PackagePlus, FileText, CheckCircle2, IndianRupee, Ban } from 'lucide-react';
 import purchasesData from '../../db/purchases.json';
 import contactsData from '../../db/contacts.json';
 import { StatusBadge } from '../Dashboard/components/StatusBadge';

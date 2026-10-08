@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ArrowLeft, Save, IndianRupee, Calendar, FileText } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import purchasesData from '../../db/purchases.json';
@@ -34,55 +34,60 @@ export default function CreatePurchasePayment() {
 
   const allPayments = (purchase.payments || []).filter(p => p.status !== 'Voided');
   
-  // Allocate past payments chronologically to find actual balances
-  let pastPaymentTotal = allPayments.reduce((acc, p) => acc + p.amount, 0);
-  if (pastPaymentTotal === 0 && purchase.paid > 0) {
-    pastPaymentTotal = purchase.paid; // Legacy fallback
-  }
-
-  const billsWithBalance = allBills.map(b => {
-    let owed = b.amount;
-    if (pastPaymentTotal > 0) {
-      if (pastPaymentTotal >= owed) {
-        pastPaymentTotal -= owed;
-        owed = 0;
-      } else {
-        owed -= pastPaymentTotal;
-        pastPaymentTotal = 0;
-      }
+  const { billsWithBalance, unpaidBills, totalPayable } = useMemo(() => {
+    let pastPaymentTotal = allPayments.reduce((acc, p) => acc + p.amount, 0);
+    if (pastPaymentTotal === 0 && purchase.paid > 0) {
+      pastPaymentTotal = purchase.paid; // Legacy fallback
     }
-    return { ...b, balance: owed };
-  });
 
-  const unpaidBills = billsWithBalance.filter(b => b.balance > 0);
-  const totalPayable = unpaidBills.reduce((acc, b) => acc + b.balance, 0);
-  
-  // We'll just assume they haven't paid anything yet for this prototype state.
+    const _billsWithBalance = allBills.map(b => {
+      let owed = b.amount;
+      if (pastPaymentTotal > 0) {
+        if (pastPaymentTotal >= owed) {
+          pastPaymentTotal -= owed;
+          owed = 0;
+        } else {
+          owed -= pastPaymentTotal;
+          pastPaymentTotal = 0;
+        }
+      }
+      return { ...b, balance: owed };
+    });
+
+    const _unpaidBills = _billsWithBalance.filter(b => b.balance > 0);
+    const _totalPayable = _unpaidBills.reduce((acc, b) => acc + b.balance, 0);
+
+    return { 
+      billsWithBalance: _billsWithBalance, 
+      unpaidBills: _unpaidBills, 
+      totalPayable: _totalPayable 
+    };
+  }, [allBills, allPayments, purchase.paid]);
   const [paymentAmount, setPaymentAmount] = useState(totalPayable);
   const [paymentMode, setPaymentMode] = useState('Bank Transfer');
   const [reference, setReference] = useState('');
 
   const handleConfirm = () => {
-    if (!purchase.payments) {
-      purchase.payments = [];
+    // Clone purchase to avoid mutating imported data directly in React render cycle
+    const updatedPurchase = JSON.parse(JSON.stringify(purchase));
+
+    if (!updatedPurchase.payments) {
+      updatedPurchase.payments = [];
     }
-    purchase.payments.push({
-      id: `PAY-${purchase.ref.split('-').pop()}-${String(purchase.payments.length + 1).padStart(2, '0')}`,
+    updatedPurchase.payments.push({
+      id: `PAY-${updatedPurchase.ref.split('-').pop()}-${String(updatedPurchase.payments.length + 1).padStart(2, '0')}`,
       date: new Date().toISOString().split('T')[0],
       amount: Number(paymentAmount),
       mode: paymentMode,
       reference: reference || '-'
     });
 
-    // If unpaidBills was mocked, ensure they are stored on purchase so we can update them
-    if (!purchase.bills || purchase.bills.length === 0) {
-      purchase.bills = unpaidBills.map(b => ({...b}));
+    if (!updatedPurchase.bills || updatedPurchase.bills.length === 0) {
+      updatedPurchase.bills = unpaidBills.map(b => ({...b}));
     }
 
-    // Automatically apply payment to open bills (we only update the status, balance is calculated dynamically on load)
     let remainingPayment = Number(paymentAmount);
-    purchase.bills.forEach(bill => {
-      // Re-allocate past payments just for this save step
+    updatedPurchase.bills.forEach(bill => {
       const currentBalance = billsWithBalance.find(b => b.id === bill.id)?.balance || 0;
       if (currentBalance > 0) {
         if (remainingPayment >= currentBalance) {
@@ -97,14 +102,14 @@ export default function CreatePurchasePayment() {
       }
     });
 
-    // Automatically close the PO if all items received and all bills paid
-    const allBillsPaid = purchase.bills.every(b => b.status === 'Paid');
-    const allReceived = purchase.items.every(i => i.received >= i.ordered);
-    if (allBillsPaid && allReceived && purchase.bills.length > 0) {
-      purchase.status = 'COMPLETED';
+    const allBillsPaid = updatedPurchase.bills.every(b => b.status === 'Paid');
+    const allReceived = updatedPurchase.items.every(i => i.received >= i.ordered);
+    if (allBillsPaid && allReceived && updatedPurchase.bills.length > 0) {
+      updatedPurchase.status = 'COMPLETED';
     }
 
-    navigate(`/purchases/${purchase.ref}`);
+    console.log("Mock saved data:", updatedPurchase);
+    navigate(`/purchases/${updatedPurchase.ref}`);
   };
 
   const formatCurrency = (amount) => {

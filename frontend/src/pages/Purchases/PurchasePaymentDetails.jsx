@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, IndianRupee } from 'lucide-react';
+import { ArrowLeft, Printer } from 'lucide-react';
 import purchasesData from '../../db/purchases.json';
 import contactsData from '../../db/contacts.json';
 import { useCompanyProfile } from '../../hooks/useCompanyProfile';
