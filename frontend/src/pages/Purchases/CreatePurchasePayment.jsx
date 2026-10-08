@@ -18,14 +18,12 @@ export default function CreatePurchasePayment() {
   };
   const supplier = getCompany(purchase.supplierId) || contactsData[0];
 
-  // In a real app, you'd fetch the UNPAID bills for this PO. 
-  let unpaidBills = (purchase.bills || []).filter(b => b.status === 'Unpaid' || b.status === 'Partially Paid');
-  
   // Mock one unpaid bill if none exist in the array but there is billed data
-  if (unpaidBills.length === 0) {
+  let allBills = purchase.bills || [];
+  if (allBills.length === 0) {
     const totalBilled = (purchase.items || []).reduce((acc, item) => acc + (item.billed * item.price), 0);
     if (totalBilled > 0) {
-      unpaidBills = [{
+      allBills = [{
         id: `BILL-${purchase.ref.split('-').pop()}-01`,
         date: purchase.date,
         amount: totalBilled * 1.05,
@@ -34,7 +32,30 @@ export default function CreatePurchasePayment() {
     }
   }
 
-  const totalPayable = unpaidBills.reduce((acc, b) => acc + b.amount, 0);
+  const allPayments = (purchase.payments || []).filter(p => p.status !== 'Voided');
+  
+  // Allocate past payments chronologically to find actual balances
+  let pastPaymentTotal = allPayments.reduce((acc, p) => acc + p.amount, 0);
+  if (pastPaymentTotal === 0 && purchase.paid > 0) {
+    pastPaymentTotal = purchase.paid; // Legacy fallback
+  }
+
+  const billsWithBalance = allBills.map(b => {
+    let owed = b.amount;
+    if (pastPaymentTotal > 0) {
+      if (pastPaymentTotal >= owed) {
+        pastPaymentTotal -= owed;
+        owed = 0;
+      } else {
+        owed -= pastPaymentTotal;
+        pastPaymentTotal = 0;
+      }
+    }
+    return { ...b, balance: owed };
+  });
+
+  const unpaidBills = billsWithBalance.filter(b => b.balance > 0);
+  const totalPayable = unpaidBills.reduce((acc, b) => acc + b.balance, 0);
   
   // We'll just assume they haven't paid anything yet for this prototype state.
   const [paymentAmount, setPaymentAmount] = useState(totalPayable);
@@ -58,15 +79,16 @@ export default function CreatePurchasePayment() {
       purchase.bills = unpaidBills.map(b => ({...b}));
     }
 
-    // Automatically apply payment to open bills
+    // Automatically apply payment to open bills (we only update the status, balance is calculated dynamically on load)
     let remainingPayment = Number(paymentAmount);
     purchase.bills.forEach(bill => {
-      if (bill.status === 'Unpaid' || bill.status === 'Partially Paid') {
-        // Find how much is still owed on this specific bill (assuming amount represents total, this is simplified)
-        if (remainingPayment >= bill.amount) {
+      // Re-allocate past payments just for this save step
+      const currentBalance = billsWithBalance.find(b => b.id === bill.id)?.balance || 0;
+      if (currentBalance > 0) {
+        if (remainingPayment >= currentBalance) {
           bill.status = 'Paid';
           bill.paymentDate = new Date().toISOString().split('T')[0];
-          remainingPayment -= bill.amount;
+          remainingPayment -= currentBalance;
         } else if (remainingPayment > 0) {
           bill.status = 'Partially Paid';
           bill.paymentDate = new Date().toISOString().split('T')[0];
@@ -79,7 +101,7 @@ export default function CreatePurchasePayment() {
     const allBillsPaid = purchase.bills.every(b => b.status === 'Paid');
     const allReceived = purchase.items.every(i => i.received >= i.ordered);
     if (allBillsPaid && allReceived && purchase.bills.length > 0) {
-      purchase.status = 'CLOSED';
+      purchase.status = 'COMPLETED';
     }
 
     navigate(`/purchases/${purchase.ref}`);
@@ -235,7 +257,10 @@ export default function CreatePurchasePayment() {
                         <div className="text-xs text-slate-500">Dated {bill.date}</div>
                       </div>
                       <div className="font-bold text-slate-800">
-                        {formatCurrency(bill.amount)}
+                        <div className="text-right">{formatCurrency(bill.balance)}</div>
+                        {bill.amount > bill.balance && (
+                          <div className="text-xs text-slate-400 font-medium line-through">{formatCurrency(bill.amount)}</div>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Send, PackagePlus, FileText, CheckCircle2, AlertCircle, IndianRupee, Trash2 } from 'lucide-react';
+import { ArrowLeft, Printer, Send, PackagePlus, FileText, CheckCircle2, AlertCircle, IndianRupee, Ban } from 'lucide-react';
 import purchasesData from '../../db/purchases.json';
 import contactsData from '../../db/contacts.json';
 import { StatusBadge } from '../Dashboard/components/StatusBadge';
@@ -16,6 +16,8 @@ export default function PurchaseDetails() {
   const [, setForceUpdate] = useState(0);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [pinModalMessage, setPinModalMessage] = useState("Please enter Admin PIN to verify this action. (Hint: 1234)");
+  const [expandedBills, setExpandedBills] = useState({});
 
   // Find the purchase by its ref (or ID fallback)
   const purchase = purchasesData.find(p => p.ref === id || p.id.toString() === id) || purchasesData[0];
@@ -38,7 +40,10 @@ export default function PurchaseDetails() {
 
   const poItems = purchase.items || [];
 
-  const subtotal = poItems.reduce((acc, item) => acc + (item.ordered * item.price), 0);
+  const subtotal = poItems.reduce((acc, item) => {
+    const activeQuantity = item.ordered - (item.canceled || 0);
+    return acc + (activeQuantity * item.price);
+  }, 0);
   const tax = subtotal * 0.05;
   const total = subtotal + tax;
 
@@ -54,33 +59,75 @@ export default function PurchaseDetails() {
     navigate(`/purchases/bills/new?po=${purchase.ref}`);
   };
 
-  const handleDeleteReceipt = (receiptId, e) => {
+  const handleVoidReceipt = (receiptId, e) => {
     e.stopPropagation();
     setPendingDelete(() => () => {
       purchase.items.forEach(i => i.received = 0);
-      if (purchase.receipts) purchase.receipts = purchase.receipts.filter(r => r.id !== receiptId);
+      const receipt = purchase.receipts?.find(r => r.id === receiptId);
+      if (receipt) receipt.status = 'Voided';
+      else {
+        // Fallback mock receipt logic
+        purchase.receipts = [{ id: receiptId, date: purchase.date, itemsReceived: 0, status: 'Voided' }];
+      }
       setForceUpdate(n => n + 1);
     });
+    setPinModalMessage("Please enter Admin PIN to void this receipt. (Hint: 1234)");
     setIsPinModalOpen(true);
   };
 
-  const handleDeleteBill = (billId, e) => {
+  const handleVoidBill = (billId, e) => {
     e.stopPropagation();
     setPendingDelete(() => () => {
       purchase.items.forEach(i => i.billed = 0);
-      if (purchase.bills) purchase.bills = purchase.bills.filter(b => b.id !== billId);
+      const bill = purchase.bills?.find(b => b.id === billId);
+      if (bill) bill.status = 'Voided';
+      else {
+        // Fallback mock bill logic
+        purchase.bills = [{ id: billId, date: purchase.date, amount: 0, status: 'Voided' }];
+      }
       setForceUpdate(n => n + 1);
     });
+    setPinModalMessage("Please enter Admin PIN to void this bill. (Hint: 1234)");
     setIsPinModalOpen(true);
   };
 
-  const handleDeletePayment = (paymentId, e) => {
+  const handleVoidPayment = (paymentId, e) => {
     e.stopPropagation();
     setPendingDelete(() => () => {
-      if (purchase.payments) purchase.payments = purchase.payments.filter(p => p.id !== paymentId);
-      if (purchase.bills) purchase.bills.forEach(b => { b.status = 'Unpaid'; delete b.paymentDate; });
+      const payment = purchase.payments?.find(p => p.id === paymentId);
+      if (payment) payment.status = 'Voided';
+      if (purchase.bills) purchase.bills.forEach(b => { 
+        if (b.status !== 'Voided') {
+          b.status = 'Unpaid'; 
+          delete b.paymentDate; 
+        }
+      });
       setForceUpdate(n => n + 1);
     });
+    setPinModalMessage("Please enter Admin PIN to void this payment. (Hint: 1234)");
+    setIsPinModalOpen(true);
+  };
+
+  const handleShortClose = () => {
+    setPendingDelete(() => () => {
+      purchase.items.forEach(item => {
+        if (item.ordered > item.received) {
+          item.canceled = item.ordered - item.received;
+        }
+      });
+      
+      const validBills = (purchase.bills || []).filter(b => b.status !== 'Voided');
+      const allBillsPaid = validBills.length > 0 && validBills.every(b => b.status === 'Paid');
+      
+      if (allBillsPaid) {
+        purchase.status = 'COMPLETED';
+      } else {
+        purchase.status = 'PENDING PAYMENT';
+      }
+      
+      setForceUpdate(n => n + 1);
+    });
+    setPinModalMessage("Please enter Admin PIN to short-close this order. Unreceived items will be canceled. (Hint: 1234)");
     setIsPinModalOpen(true);
   };
 
@@ -96,9 +143,9 @@ export default function PurchaseDetails() {
 
   // Determine pipeline steps
   const steps = [
-    { label: 'Order', targetId: 'po-document-section', active: ['DRAFT', 'ORDERED', 'PENDING APPROVAL', 'PENDING ACCEPTANCE', 'ACCEPTED'].includes(purchase.status), completed: ['PARTIALLY RECEIVED', 'FULLY RECEIVED', 'CLOSED'].includes(purchase.status) },
-    { label: 'Received', targetId: 'goods-receipt-section', active: ['PARTIALLY RECEIVED', 'FULLY RECEIVED'].includes(purchase.status), completed: ['CLOSED'].includes(purchase.status) },
-    { label: 'Closed', targetId: 'purchase-bills-section', active: ['CLOSED'].includes(purchase.status), completed: ['CLOSED'].includes(purchase.status) },
+    { label: 'Order', targetId: 'po-document-section', active: ['DRAFT', 'ORDERED', 'PENDING APPROVAL', 'PENDING ACCEPTANCE', 'ACCEPTED'].includes(purchase.status), completed: ['PARTIALLY RECEIVED', 'PENDING PAYMENT', 'COMPLETED'].includes(purchase.status) },
+    { label: 'Received', targetId: 'goods-receipt-section', active: ['PARTIALLY RECEIVED', 'PENDING PAYMENT'].includes(purchase.status), completed: ['COMPLETED'].includes(purchase.status) },
+    { label: 'Completed', targetId: 'purchase-bills-section', active: ['COMPLETED'].includes(purchase.status), completed: ['COMPLETED'].includes(purchase.status) },
   ];
 
   const scrollToSection = (id) => {
@@ -141,8 +188,19 @@ export default function PurchaseDetails() {
 
   const unpaidBills = billsList.filter(b => b.status === 'Unpaid' || b.status === 'Partially Paid');
   const canPay = unpaidBills.length > 0;
-  const hasPayments = purchase.payments && purchase.payments.length > 0;
-  const mockPayments = hasPayments ? purchase.payments : [];
+  let paymentsList = purchase.payments || [];
+  if (paymentsList.length === 0 && purchase.paid > 0) {
+    paymentsList = [{
+      id: `PAY-${purchase.ref.split('-').pop()}-01`,
+      date: purchase.date,
+      mode: 'Bank Transfer',
+      reference: 'Legacy Payment',
+      amount: purchase.paid,
+      status: 'Completed'
+    }];
+  }
+  const hasPayments = paymentsList.length > 0;
+  const mockPayments = paymentsList;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12 print:pb-0 print:m-0 print:space-y-0 fade-in px-4 sm:px-0">
@@ -161,7 +219,15 @@ export default function PurchaseDetails() {
         </div>
         
         <div className="flex items-center space-x-3">
-          <button onClick={handlePrint} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center">
+          {purchase.status === 'PARTIALLY RECEIVED' && (
+            <button 
+              onClick={handleShortClose}
+              className="px-4 py-2 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900 transition-colors shadow-sm flex items-center text-sm"
+            >
+              Short Close Order
+            </button>
+          )}
+          <button onClick={handlePrint} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center text-sm">
             <Printer className="w-4 h-4 mr-2" />
             PDF / Print
           </button>
@@ -264,20 +330,22 @@ export default function PurchaseDetails() {
                 </thead>
                 <tbody className="divide-y divide-slate-50 bg-white">
                   {mockReceipts.map((receipt) => (
-                    <tr key={receipt.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={receipt.id} className={`hover:bg-slate-50 transition-colors ${receipt.status === 'Voided' ? 'opacity-50 grayscale' : ''}`}>
                       <td className="py-3 px-6 font-bold text-orange-600 hover:text-orange-700 cursor-pointer" onClick={() => navigate(`/purchases/receipts/${receipt.id}`)}>{receipt.id}</td>
                       <td className="py-3 px-6 text-slate-600 font-medium">{receipt.date}</td>
                       <td className="py-3 px-6 text-center font-bold text-slate-800">{receipt.itemsReceived}</td>
                       <td className="py-3 px-6 text-right">
-                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-emerald-100 text-emerald-700">
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${receipt.status === 'Voided' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {receipt.status !== 'Voided' && <CheckCircle2 className="w-3.5 h-3.5 mr-1" />}
                           {receipt.status}
                         </span>
                       </td>
                       <td className="py-3 px-6 text-right">
-                        <button onClick={(e) => handleDeleteReceipt(receipt.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Receipt">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {receipt.status !== 'Voided' && (
+                          <button onClick={(e) => handleVoidReceipt(receipt.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Void Receipt">
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -295,57 +363,173 @@ export default function PurchaseDetails() {
         </div>
       )}
 
-      {/* Bill History */}
-      {(hasBills || canBill) && (
+      {/* Financial Ledger (Bills & Payments) */}
+      {(hasBills || canBill || hasPayments || canPay) && (
         <div id="purchase-bills-section" className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden print:hidden mb-6 scroll-mt-6">
           <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-800 tracking-tight">Purchase Bills History</h3>
-              <p className="text-sm text-slate-500 font-medium">Supplier invoices recorded against this purchase order</p>
+              <h3 className="text-lg font-black text-slate-800 tracking-tight">Financial Ledger</h3>
+              <p className="text-sm text-slate-500 font-medium">Bills and payments against this purchase order</p>
             </div>
-            {canBill && (
-              <button onClick={handleCreateBill} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm shadow-indigo-200 transition-colors text-sm flex items-center whitespace-nowrap">
-                <FileText className="w-4 h-4 mr-2" />
-                Create Purchase Bill
-              </button>
-            )}
+            <div className="flex items-center space-x-3">
+              {canBill && (
+                <button onClick={handleCreateBill} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm shadow-indigo-200 transition-colors text-sm flex items-center whitespace-nowrap">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Create Bill
+                </button>
+              )}
+              {canPay && (
+                <button onClick={() => navigate(`/purchases/payments/new?po=${purchase.ref}`)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm shadow-emerald-200 transition-colors text-sm flex items-center whitespace-nowrap">
+                  <IndianRupee className="w-4 h-4 mr-2" />
+                  Record Payment
+                </button>
+              )}
+            </div>
           </div>
-          {hasBills ? (
+
+          {(hasBills || hasPayments) ? (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-white border-b border-slate-100">
                   <tr>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Bill #</th>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Created Date</th>
+                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Type</th>
+                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Ref #</th>
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Payment Date</th>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Status</th>
+                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Status / Info</th>
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 bg-white">
-                  {mockBills.map((bill) => (
-                    <tr key={bill.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-6 font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer" onClick={() => navigate(`/purchases/bills/${bill.id}`)}>{bill.id}</td>
-                      <td className="py-3 px-6 text-slate-600 font-medium">{bill.date}</td>
-                      <td className="py-3 px-6 text-right font-black text-slate-800">{formatCurrency(bill.amount)}</td>
-                      <td className="py-3 px-6 text-right font-medium text-slate-600">{bill.paymentDate || '-'}</td>
-                      <td className="py-3 px-6 text-right">
-                        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${
-                          bill.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
-                          bill.status === 'Partially Paid' ? 'bg-indigo-100 text-indigo-700' :
-                          'bg-amber-100 text-amber-700'
-                        }`}>
-                          {bill.status || 'Unpaid'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-6 text-right">
-                        <button onClick={(e) => handleDeleteBill(bill.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Bill">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    // Group payments under bills
+                    const unallocatedPayments = [...mockPayments].map(p => ({ ...p, usedAmount: 0 }));
+                    
+                    const rows = [];
+                    
+                    mockBills.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(bill => {
+                      const billRow = { ...bill, itemType: 'Bill', isChild: false };
+                      rows.push(billRow);
+                      
+                      const billPayments = [];
+                      let owed = bill.amount;
+                      
+                      unallocatedPayments.forEach(payment => {
+                        if (owed > 0 && payment.status !== 'Voided') {
+                          const availableAmount = payment.amount - payment.usedAmount;
+                          if (availableAmount > 0) {
+                            const applied = Math.min(owed, availableAmount);
+                            billPayments.push({
+                              ...payment,
+                              itemType: 'Payment',
+                              isChild: true,
+                              parentId: bill.id,
+                              appliedAmount: applied
+                            });
+                            payment.usedAmount += applied;
+                            owed -= applied;
+                          }
+                        }
+                      });
+
+                      billRow.balance = owed;
+                      billRow.hasChildren = billPayments.length > 0;
+
+                      if (expandedBills[bill.id]) {
+                        rows.push(...billPayments);
+                      }
+                    });
+
+                    // Add any fully unallocated payments (advances, overpayments) at the end
+                    unallocatedPayments.forEach(payment => {
+                      if (payment.usedAmount === 0 && payment.status !== 'Voided') {
+                        rows.push({ ...payment, itemType: 'Payment', isChild: false, appliedAmount: payment.amount });
+                      }
+                      if (payment.status === 'Voided') {
+                        rows.push({ ...payment, itemType: 'Payment', isChild: false, appliedAmount: payment.amount });
+                      }
+                    });
+
+                    return rows.map((item, idx) => (
+                      <tr key={`${item.id}-${idx}`} className={`hover:bg-slate-50 transition-colors ${item.status === 'Voided' ? 'opacity-50' : ''}`}>
+                        <td className="py-4 px-6 text-slate-600 font-medium">
+                          {item.isChild ? (
+                            <div className="flex items-center text-slate-400">
+                              <div className="w-4 h-4 border-l-2 border-b-2 border-slate-300 rounded-bl-lg mr-3 ml-4"></div>
+                              {item.date}
+                            </div>
+                          ) : item.hasChildren ? (
+                            <button 
+                              onClick={() => setExpandedBills(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                              className="flex items-center text-indigo-600 hover:text-indigo-800 transition-colors"
+                            >
+                              <svg className={`w-4 h-4 mr-2 transform transition-transform ${expandedBills[item.id] ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                              {item.date}
+                            </button>
+                          ) : (
+                            item.date
+                          )}
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${
+                            item.itemType === 'Bill' ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'
+                          }`}>
+                            {item.itemType}
+                          </span>
+                        </td>
+                        <td 
+                          className={`py-4 px-6 font-bold cursor-pointer hover:underline ${item.itemType === 'Bill' ? 'text-indigo-600' : 'text-emerald-600'}`}
+                          onClick={() => navigate(`/purchases/${item.itemType.toLowerCase()}s/${item.id}`)}
+                        >
+                          {item.id}
+                        </td>
+                        <td className={`py-4 px-6 text-right font-black text-slate-800 ${item.status === 'Voided' ? 'line-through text-slate-400' : ''}`}>
+                          {item.isChild ? (
+                            <div className="flex flex-col items-end">
+                              <span>{formatCurrency(item.appliedAmount)}</span>
+                              {item.appliedAmount < item.amount && <span className="text-xs text-slate-400 font-medium font-normal">(from {formatCurrency(item.amount)})</span>}
+                            </div>
+                          ) : item.itemType === 'Bill' && item.balance > 0 && item.balance < item.amount ? (
+                            <div className="flex flex-col items-end">
+                              <span>{formatCurrency(item.amount)}</span>
+                              <span className="text-xs text-amber-600 font-medium mt-0.5">Bal: {formatCurrency(item.balance)}</span>
+                            </div>
+                          ) : (
+                            formatCurrency(item.amount)
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          {item.itemType === 'Bill' ? (
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${
+                              item.status === 'Voided' ? 'bg-slate-100 text-slate-500' :
+                              item.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
+                              item.status === 'Partially Paid' ? 'bg-indigo-100 text-indigo-700' :
+                              'bg-amber-100 text-amber-700'
+                            }`}>
+                              {item.status || 'Unpaid'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 font-medium text-xs">
+                              {item.mode}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          {!item.isChild && item.status !== 'Voided' && (
+                            <button 
+                              onClick={(e) => item.itemType === 'Bill' ? handleVoidBill(item.id, e) : handleVoidPayment(item.id, e)} 
+                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" 
+                              title={`Void ${item.itemType}`}
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -354,64 +538,7 @@ export default function PurchaseDetails() {
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-50 mb-3">
                 <FileText className="w-6 h-6 text-slate-400" />
               </div>
-              <p className="text-slate-500 font-medium">No bills have been created yet.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Payments History */}
-      {(hasPayments || canPay) && (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden print:hidden mb-6">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-black text-slate-800 tracking-tight">Payment History</h3>
-              <p className="text-sm text-slate-500 font-medium">Payments made towards bills for this purchase order</p>
-            </div>
-            {canPay && (
-              <button onClick={() => navigate(`/purchases/payments/new?po=${purchase.ref}`)} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm shadow-emerald-200 transition-colors text-sm flex items-center whitespace-nowrap">
-                <IndianRupee className="w-4 h-4 mr-2" />
-                Record Payment
-              </button>
-            )}
-          </div>
-          {hasPayments ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-white border-b border-slate-100">
-                  <tr>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Payment #</th>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Mode</th>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Ref</th>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
-                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 bg-white">
-                  {mockPayments.map((payment) => (
-                    <tr key={payment.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-6 font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer" onClick={() => navigate(`/purchases/payments/${payment.id}`)}>{payment.id}</td>
-                      <td className="py-3 px-6 text-slate-600 font-medium">{payment.date}</td>
-                      <td className="py-3 px-6 text-slate-600 font-medium">{payment.mode}</td>
-                      <td className="py-3 px-6 text-slate-600 font-medium">{payment.reference}</td>
-                      <td className="py-3 px-6 text-right font-black text-slate-800">{formatCurrency(payment.amount)}</td>
-                      <td className="py-3 px-6 text-right">
-                        <button onClick={(e) => handleDeletePayment(payment.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Payment">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="p-8 text-center bg-white">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-50 mb-3">
-                <IndianRupee className="w-6 h-6 text-slate-400" />
-              </div>
-              <p className="text-slate-500 font-medium">No payments have been recorded yet.</p>
+              <p className="text-slate-500 font-medium">No financials recorded yet.</p>
             </div>
           )}
         </div>
@@ -474,9 +601,13 @@ export default function PurchaseDetails() {
                 <tr className="border-b-2 border-slate-200">
                   <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider">Product / Service</th>
                   <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider text-center">Ordered</th>
+                  {poItems.some(i => i.canceled > 0) && (
+                    <th className="pb-4 font-bold text-red-500 uppercase tracking-wider text-center">Canceled</th>
+                  )}
                   <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider text-center">Received</th>
                   <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider text-center">Billed</th>
                   <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider text-right">Unit Price</th>
+                  <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider text-right">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -484,8 +615,18 @@ export default function PurchaseDetails() {
                   <tr key={idx} className="group hover:bg-slate-50 transition-colors">
                     <td className="py-4 pr-4">
                       <div className="font-bold text-slate-800">{item.name}</div>
+                      {item.canceled > 0 && <div className="text-xs text-red-500 font-semibold mt-1">Short Closed</div>}
                     </td>
                     <td className="py-4 px-2 text-center font-bold text-slate-800">{item.ordered}</td>
+                    {poItems.some(i => i.canceled > 0) && (
+                      <td className="py-4 px-2 text-center">
+                        {item.canceled > 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-600">
+                            {item.canceled}
+                          </span>
+                        ) : '-'}
+                      </td>
+                    )}
                     <td className="py-4 px-2 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${item.received === item.ordered ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                         {item.received}
@@ -497,6 +638,7 @@ export default function PurchaseDetails() {
                       </span>
                     </td>
                     <td className="py-4 pl-4 text-right font-bold text-slate-800">{formatCurrency(item.price)}</td>
+                    <td className="py-4 pl-4 text-right font-black text-slate-800">{formatCurrency((item.ordered - (item.canceled || 0)) * item.price)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -533,7 +675,7 @@ export default function PurchaseDetails() {
         isOpen={isPinModalOpen} 
         onClose={() => { setIsPinModalOpen(false); setPendingDelete(null); }} 
         onConfirm={handlePinConfirm} 
-        message="Please enter Admin PIN to permanently delete this record. (Hint: 1234)"
+        message={pinModalMessage}
       />
     </div>
   );

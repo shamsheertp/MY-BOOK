@@ -29,7 +29,7 @@ export function PurchasesFilters({ searchTerm, setSearchTerm, statusFilter, setS
           <option value="PENDING ACCEPTANCE">Pending Acceptance</option>
           <option value="ACCEPTED">Accepted</option>
           <option value="PARTIALLY RECEIVED">Partially Received</option>
-          <option value="FULLY RECEIVED">Fully Received</option>
+          <option value="PENDING PAYMENT">Pending Payment</option>
           <option value="CLOSED">Closed</option>
         </select>
       </div>

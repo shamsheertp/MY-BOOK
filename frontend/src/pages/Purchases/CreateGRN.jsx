@@ -87,9 +87,9 @@ export default function CreateGRN() {
 
     if (receivedAnything) {
       const allReceived = purchase.items.every(i => i.received >= i.ordered);
-      if (allReceived && purchase.status !== 'CLOSED') {
-          purchase.status = 'FULLY RECEIVED';
-      } else if (purchase.status !== 'CLOSED' && purchase.status !== 'FULLY RECEIVED') {
+      if (allReceived && purchase.status !== 'COMPLETED') {
+          purchase.status = 'PENDING PAYMENT';
+      } else if (purchase.status !== 'COMPLETED' && purchase.status !== 'PENDING PAYMENT') {
           purchase.status = 'PARTIALLY RECEIVED';
       }
     }

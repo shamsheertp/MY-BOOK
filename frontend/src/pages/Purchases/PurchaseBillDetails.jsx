@@ -99,6 +99,35 @@ export default function PurchaseBillDetails() {
             </div>
           </div>
         </div>
+
+        {/* Items Summary (For context) */}
+        {purchase && purchase.items && purchase.items.length > 0 && (
+          <div className="p-8 md:p-12 border-t border-slate-100 bg-slate-50/30">
+            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Items Summary</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-white border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider rounded-tl-lg">Item</th>
+                    <th className="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Qty Billed</th>
+                    <th className="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Price</th>
+                    <th className="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right rounded-tr-lg">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {purchase.items.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-4 font-bold text-slate-700">{item.name}</td>
+                      <td className="py-3 px-4 text-right text-slate-600">{item.billed || item.ordered}</td>
+                      <td className="py-3 px-4 text-right text-slate-600">{formatCurrency(item.price)}</td>
+                      <td className="py-3 px-4 text-right font-bold text-slate-800">{formatCurrency((item.billed || item.ordered) * item.price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

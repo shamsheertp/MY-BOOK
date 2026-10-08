@@ -46,6 +46,45 @@ export function PurchasesTable({ purchases, currentPage, itemsPerPage, onPageCha
               paginatedPurchases.map((purchase) => {
                 const company = getCompany(purchase.supplierId);
                 const supplierName = getSupplierName(purchase.supplierId);
+                const items = purchase.items || [];
+                const subtotal = items.reduce((acc, item) => {
+                  const activeQuantity = item.ordered - (item.canceled || 0);
+                  return acc + (activeQuantity * item.price);
+                }, 0);
+                const dynamicAmount = subtotal * 1.05; // including 5% tax
+
+                const payments = purchase.payments || [];
+                const totalPaid = payments.length > 0
+                  ? payments.filter(p => p.status !== 'Voided').reduce((acc, p) => acc + p.amount, 0)
+                  : (purchase.paid || 0);
+                const dynamicBalance = Math.max(0, dynamicAmount - totalPaid);
+
+                let dynamicStatus = purchase.status || 'DRAFT';
+                if (dynamicStatus !== 'DRAFT') {
+                  const allReceived = items.length > 0 && items.every(i => i.received >= (i.ordered - (i.canceled || 0)));
+                  const someReceived = items.some(i => i.received > 0);
+                  
+                  const bills = purchase.bills || [];
+                  const validBills = bills.filter(b => b.status !== 'Voided');
+                  const allBillsPaid = validBills.length > 0 && validBills.every(b => b.status === 'Paid');
+                  const expectedBillTotal = items.reduce((acc, i) => {
+                    const activeQuantity = i.ordered - (i.canceled || 0);
+                    return acc + (activeQuantity * i.price);
+                  }, 0) * 1.05;
+                  const actualBilledTotal = validBills.reduce((acc, b) => acc + b.amount, 0);
+                  const isFullyBilled = Math.abs(expectedBillTotal - actualBilledTotal) < 1;
+
+                  if (allReceived && isFullyBilled && allBillsPaid) {
+                    dynamicStatus = 'COMPLETED';
+                  } else if (allReceived) {
+                    dynamicStatus = 'PENDING PAYMENT';
+                  } else if (someReceived) {
+                    dynamicStatus = 'PARTIALLY RECEIVED';
+                  } else {
+                    dynamicStatus = 'ORDERED';
+                  }
+                }
+
                 return (
                 <tr 
                   key={purchase.id} 
@@ -58,10 +97,10 @@ export function PurchasesTable({ purchases, currentPage, itemsPerPage, onPageCha
                     {company && <div className="text-xs text-slate-500 mt-0.5">{company}</div>}
                   </td>
                   <td className="px-6 py-4 text-slate-500 font-medium">{purchase.date}</td>
-                  <td className="px-6 py-4 font-bold text-slate-800 text-right">{formatCurrency(purchase.total)}</td>
-                  <td className="px-6 py-4 font-bold text-rose-600 text-right">{purchase.balance > 0 ? formatCurrency(purchase.balance) : ''}</td>
+                  <td className="px-6 py-4 font-bold text-slate-800 text-right">{formatCurrency(dynamicAmount)}</td>
+                  <td className="px-6 py-4 font-bold text-rose-600 text-right">{dynamicBalance > 0 ? formatCurrency(dynamicBalance) : ''}</td>
                   <td className="px-6 py-4 text-center">
-                    <StatusBadge status={purchase.status || 'DRAFT'} />
+                    <StatusBadge status={dynamicStatus} />
                   </td>
                 </tr>
                 );

@@ -22,7 +22,7 @@
     "total": 5000,
     "paid": 4500,
     "balance": 500,
-    "status": "FULLY RECEIVED",
+    "status": "PENDING PAYMENT",
     "items": [
       { "id": 1, "name": "Office Chair", "ordered": 10, "received": 10, "billed": 10, "price": 500 }
     ]
@@ -35,7 +35,7 @@
     "total": 12000,
     "paid": 12000,
     "balance": 0,
-    "status": "CLOSED",
+    "status": "COMPLETED",
     "items": [
       { "id": 1, "name": "Server Rack", "ordered": 2, "received": 2, "billed": 2, "price": 6000 }
     ]
@@ -48,7 +48,7 @@
     "total": 45000,
     "paid": 0,
     "balance": 45000,
-    "status": "PENDING ACCEPTANCE",
+    "status": "ORDERED",
     "items": [
       { "id": 1, "name": "Network Switch", "ordered": 3, "received": 0, "billed": 0, "price": 15000 }
     ]
@@ -74,7 +74,7 @@
     "total": 850,
     "paid": 500,
     "balance": 350,
-    "status": "ACCEPTED",
+    "status": "ORDERED",
     "items": [
       { "id": 1, "name": "Mechanical Keyboard", "ordered": 10, "received": 0, "billed": 0, "price": 85 }
     ]
@@ -87,7 +87,7 @@
     "total": 15000,
     "paid": 0,
     "balance": 15000,
-    "status": "ACCEPTED",
+    "status": "ORDERED",
     "notes": "New accepted order transaction, ready for goods receipt.",
     "items": [
       { "id": 1, "name": "Standing Desk", "ordered": 5, "received": 0, "billed": 0, "price": 3000 }
@@ -101,7 +101,7 @@
     "total": 28000,
     "paid": 0,
     "balance": 28000,
-    "status": "PENDING APPROVAL",
+    "status": "ORDERED",
     "notes": "Pending internal approval before sending to supplier.",
     "items": [
       { "id": 1, "name": "Projector", "ordered": 2, "received": 0, "billed": 0, "price": 14000 }
