@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../../Dashboard/components/StatusBadge';
 import contactsData from '../../../db/contacts.json';
 
-export function SalesTable({ sales, currentPage, itemsPerPage, onPageChange }) {
+export function PurchasesTable({ purchases, currentPage, itemsPerPage, onPageChange, getSupplierName }) {
   const navigate = useNavigate();
   
-  const totalPages = Math.ceil(sales.length / itemsPerPage);
-  const paginatedSales = sales.slice(
+  const totalPages = Math.ceil(purchases.length / itemsPerPage);
+  const paginatedPurchases = purchases.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
@@ -20,9 +20,9 @@ export function SalesTable({ sales, currentPage, itemsPerPage, onPageChange }) {
     }).format(amount);
   };
 
-  const getCompany = (customerId) => {
-    if (!customerId) return '';
-    const digit = customerId.split('-')[1];
+  const getCompany = (supplierId) => {
+    if (!supplierId) return '';
+    const digit = supplierId.split('-')[1];
     const c = contactsData.find(c => c.id === `CONT-${digit}`);
     return c?.companyName || '';
   };
@@ -33,8 +33,8 @@ export function SalesTable({ sales, currentPage, itemsPerPage, onPageChange }) {
         <table className="w-full text-sm text-left border-collapse">
           <thead className="bg-slate-50/80 text-slate-500 font-medium border-b border-slate-100">
             <tr>
-              <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold">Ref No</th>
-              <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold">Customer</th>
+              <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold">PO No</th>
+              <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold">Supplier</th>
               <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold">Date</th>
               <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold text-right">Amount</th>
               <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold text-right">Balance</th>
@@ -42,25 +42,26 @@ export function SalesTable({ sales, currentPage, itemsPerPage, onPageChange }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
-            {paginatedSales.length > 0 ? (
-              paginatedSales.map((sale) => {
-                const company = getCompany(sale.customerId);
+            {paginatedPurchases.length > 0 ? (
+              paginatedPurchases.map((purchase) => {
+                const company = getCompany(purchase.supplierId);
+                const supplierName = getSupplierName(purchase.supplierId);
                 return (
                 <tr 
-                  key={sale.id} 
-                  onClick={() => navigate(`/sales/${sale.ref}`)}
+                  key={purchase.id} 
+                  onClick={() => navigate(`/purchases/${purchase.ref}`)}
                   className="hover:bg-white/80 transition-colors cursor-pointer group border-b border-slate-50 last:border-0"
                 >
-                  <td className="px-6 py-4 font-bold text-indigo-600">{sale.ref}</td>
+                  <td className="px-6 py-4 font-bold text-orange-600">{purchase.ref}</td>
                   <td className="px-6 py-4">
-                    <div className="font-semibold text-slate-800">{sale.customerName}</div>
+                    <div className="font-semibold text-slate-800">{supplierName}</div>
                     {company && <div className="text-xs text-slate-500 mt-0.5">{company}</div>}
                   </td>
-                  <td className="px-6 py-4 text-slate-500 font-medium">{sale.date}</td>
-                  <td className="px-6 py-4 font-bold text-slate-800 text-right">{formatCurrency(sale.total)}</td>
-                  <td className="px-6 py-4 font-bold text-rose-600 text-right">{sale.balance > 0 ? formatCurrency(sale.balance) : ''}</td>
+                  <td className="px-6 py-4 text-slate-500 font-medium">{purchase.date}</td>
+                  <td className="px-6 py-4 font-bold text-slate-800 text-right">{formatCurrency(purchase.total)}</td>
+                  <td className="px-6 py-4 font-bold text-rose-600 text-right">{purchase.balance > 0 ? formatCurrency(purchase.balance) : ''}</td>
                   <td className="px-6 py-4 text-center">
-                    <StatusBadge status={sale.status} />
+                    <StatusBadge status={purchase.status || 'DRAFT'} />
                   </td>
                 </tr>
                 );
@@ -68,7 +69,7 @@ export function SalesTable({ sales, currentPage, itemsPerPage, onPageChange }) {
             ) : (
               <tr>
                 <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
-                  No sales found matching your criteria.
+                  No purchases found matching your criteria.
                 </td>
               </tr>
             )}
@@ -77,7 +78,7 @@ export function SalesTable({ sales, currentPage, itemsPerPage, onPageChange }) {
       </div>
       
       <div className="p-4 border-t border-slate-100 bg-white/60 flex items-center justify-between text-sm text-slate-500">
-        <span>Showing {paginatedSales.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, sales.length)} of {sales.length} records</span>
+        <span>Showing {paginatedPurchases.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, purchases.length)} of {purchases.length} records</span>
         
         <div className="flex items-center space-x-2">
           <button 

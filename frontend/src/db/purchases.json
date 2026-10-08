@@ -4,10 +4,15 @@
     "supplierId": "SUP-001",
     "ref": "PO-2026-001",
     "date": "01 Oct 2026",
-    "total": 25000,
+    "total": 1250000,
     "paid": 10000,
     "balance": 15000,
-    "status": "Partially Paid"
+    "status": "PARTIALLY RECEIVED",
+    "notes": "Delivery expected in batches.",
+    "items": [
+      { "id": 1, "name": "Laptop Pro 15", "ordered": 5, "received": 4, "billed": 0, "price": 200000 },
+      { "id": 2, "name": "Dell Monitor 24", "ordered": 5, "received": 5, "billed": 5, "price": 50000 }
+    ]
   },
   {
     "id": 2,
@@ -17,7 +22,10 @@
     "total": 5000,
     "paid": 4500,
     "balance": 500,
-    "status": "Partially Paid"
+    "status": "FULLY RECEIVED",
+    "items": [
+      { "id": 1, "name": "Office Chair", "ordered": 10, "received": 10, "billed": 10, "price": 500 }
+    ]
   },
   {
     "id": 3,
@@ -27,7 +35,10 @@
     "total": 12000,
     "paid": 12000,
     "balance": 0,
-    "status": "Paid"
+    "status": "CLOSED",
+    "items": [
+      { "id": 1, "name": "Server Rack", "ordered": 2, "received": 2, "billed": 2, "price": 6000 }
+    ]
   },
   {
     "id": 4,
@@ -37,7 +48,10 @@
     "total": 45000,
     "paid": 0,
     "balance": 45000,
-    "status": "Pending"
+    "status": "PENDING ACCEPTANCE",
+    "items": [
+      { "id": 1, "name": "Network Switch", "ordered": 3, "received": 0, "billed": 0, "price": 15000 }
+    ]
   },
   {
     "id": 5,
@@ -47,7 +61,10 @@
     "total": 1200,
     "paid": 0,
     "balance": 1200,
-    "status": "Pending"
+    "status": "DRAFT",
+    "items": [
+      { "id": 1, "name": "Wireless Mouse", "ordered": 20, "received": 0, "billed": 0, "price": 60 }
+    ]
   },
   {
     "id": 6,
@@ -57,46 +74,37 @@
     "total": 850,
     "paid": 500,
     "balance": 350,
-    "status": "Partially Paid"
+    "status": "ACCEPTED",
+    "items": [
+      { "id": 1, "name": "Mechanical Keyboard", "ordered": 10, "received": 0, "billed": 0, "price": 85 }
+    ]
   },
   {
-    "id": 7,
-    "supplierId": "SUP-001",
-    "ref": "PO-2026-007",
-    "date": "20 Aug 2026",
-    "total": 35000,
-    "paid": 35000,
-    "balance": 0,
-    "status": "Paid"
-  },
-  {
-    "id": 8,
-    "supplierId": "SUP-004",
-    "ref": "PO-2026-008",
-    "date": "18 Oct 2026",
-    "total": 125000,
-    "paid": 50000,
-    "balance": 75000,
-    "status": "Partially Paid"
-  },
-  {
-    "id": 9,
-    "supplierId": "SUP-002",
-    "ref": "PO-2026-009",
-    "date": "02 Nov 2026",
-    "total": 8500,
+    "id": 11,
+    "supplierId": "SUP-003",
+    "ref": "PO-2026-011",
+    "date": "08 Oct 2026",
+    "total": 15000,
     "paid": 0,
-    "balance": 8500,
-    "status": "Pending"
+    "balance": 15000,
+    "status": "ACCEPTED",
+    "notes": "New accepted order transaction, ready for goods receipt.",
+    "items": [
+      { "id": 1, "name": "Standing Desk", "ordered": 5, "received": 0, "billed": 0, "price": 3000 }
+    ]
   },
   {
-    "id": 10,
-    "supplierId": "SUP-008",
-    "ref": "PO-2026-010",
-    "date": "10 Nov 2026",
-    "total": 42000,
-    "paid": 42000,
-    "balance": 0,
-    "status": "Paid"
+    "id": 12,
+    "supplierId": "SUP-006",
+    "ref": "PO-2026-012",
+    "date": "08 Oct 2026",
+    "total": 28000,
+    "paid": 0,
+    "balance": 28000,
+    "status": "PENDING APPROVAL",
+    "notes": "Pending internal approval before sending to supplier.",
+    "items": [
+      { "id": 1, "name": "Projector", "ordered": 2, "received": 0, "billed": 0, "price": 14000 }
+    ]
   }
 ]

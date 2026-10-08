@@ -7,6 +7,14 @@ import Sales from './pages/Sales/Sales';
 import SaleDetails from './pages/Sales/SaleDetails';
 import CreateInvoice from './pages/Sales/CreateInvoice';
 import PurchaseDetails from './pages/Purchases/PurchaseDetails';
+import Purchases from './pages/Purchases/Purchases';
+import CreatePurchase from './pages/Purchases/CreatePurchase';
+import CreateGRN from './pages/Purchases/CreateGRN';
+import GRNDetails from './pages/Purchases/GRNDetails';
+import CreatePurchaseBill from './pages/Purchases/CreatePurchaseBill';
+import PurchaseBillDetails from './pages/Purchases/PurchaseBillDetails';
+import CreatePurchasePayment from './pages/Purchases/CreatePurchasePayment';
+import PurchasePaymentDetails from './pages/Purchases/PurchasePaymentDetails';
 import CompanyProfile from './pages/Settings/CompanyProfile';
 
 function App() {
@@ -20,6 +28,14 @@ function App() {
           <Route path="/sales" element={<Sales />} />
           <Route path="/sales/new" element={<CreateInvoice />} />
           <Route path="/sales/:id" element={<SaleDetails />} />
+          <Route path="/purchases" element={<Purchases />} />
+          <Route path="/purchases/new" element={<CreatePurchase />} />
+          <Route path="/purchases/receipts/new" element={<CreateGRN />} />
+          <Route path="/purchases/receipts/:id" element={<GRNDetails />} />
+          <Route path="/purchases/bills/new" element={<CreatePurchaseBill />} />
+          <Route path="/purchases/bills/:id" element={<PurchaseBillDetails />} />
+          <Route path="/purchases/payments/new" element={<CreatePurchasePayment />} />
+          <Route path="/purchases/payments/:id" element={<PurchasePaymentDetails />} />
           <Route path="/purchases/:id" element={<PurchaseDetails />} />
           <Route path="/settings" element={<CompanyProfile />} />
           <Route path="/settings/company" element={<CompanyProfile />} />
