@@ -1,0 +1,29 @@
+[
+  {
+    "id": "PRD-001",
+    "name": "Wireless Mouse",
+    "sku": "WM-2023",
+    "category": "Electronics",
+    "price": 29.99,
+    "stock": 150,
+    "status": "In Stock"
+  },
+  {
+    "id": "PRD-002",
+    "name": "Office Chair",
+    "sku": "FURN-01",
+    "category": "Furniture",
+    "price": 199.50,
+    "stock": 12,
+    "status": "Low Stock"
+  },
+  {
+    "id": "PRD-003",
+    "name": "Mechanical Keyboard",
+    "sku": "KB-MCH-01",
+    "category": "Electronics",
+    "price": 89.99,
+    "stock": 0,
+    "status": "Out of Stock"
+  }
+]

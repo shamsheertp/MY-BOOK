@@ -1,0 +1,20 @@
+[
+  {
+    "id": "EXP-001",
+    "date": "2026-10-01",
+    "category": "Office Supplies",
+    "amount": 250.00,
+    "description": "Stationery and printer ink",
+    "paymentMethod": "Credit Card",
+    "status": "Paid"
+  },
+  {
+    "id": "EXP-002",
+    "date": "2026-10-05",
+    "category": "Utilities",
+    "amount": 120.50,
+    "description": "Electricity bill",
+    "paymentMethod": "Bank Transfer",
+    "status": "Pending"
+  }
+]
