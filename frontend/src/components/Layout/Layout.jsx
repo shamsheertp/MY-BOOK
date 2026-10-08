@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Truck, Package,
-  ShoppingCart, Receipt, CreditCard, BookOpen,
+  ShoppingCart, Receipt, CreditCard, BookOpen, Book,
   FileText, Settings, Menu, X, Bell, User as UserIcon, Search, Building2
 } from 'lucide-react';
 import { SidebarItem, SidebarSection } from './SidebarItem';
@@ -27,6 +27,7 @@ export default function Layout({ children }) {
     { type: 'link', to: '/expenses', icon: CreditCard, label: 'Expenses', isChild: true },
     { type: 'section', title: 'Accounting & Reports' },
     { type: 'link', to: '/journal', icon: BookOpen, label: 'Journal', isChild: true },
+    { type: 'link', to: '/ledger', icon: Book, label: 'General Ledger', isChild: true },
     { type: 'link', to: '/reports', icon: FileText, label: 'Reports', isChild: true },
     { type: 'section', title: 'Settings' },
     { type: 'link', to: '/settings/company', icon: Building2, label: 'Company Profile', isChild: true },

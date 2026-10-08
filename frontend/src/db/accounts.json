@@ -1,0 +1,11 @@
+[
+  { "id": "ACC-001", "code": "1001", "name": "Cash in Hand", "type": "Asset", "balance": 485000, "status": "Active" },
+  { "id": "ACC-002", "code": "1002", "name": "Bank Account", "type": "Asset", "balance": 110000, "status": "Active" },
+  { "id": "ACC-003", "code": "2001", "name": "Accounts Payable", "type": "Liability", "balance": 45000, "status": "Active" },
+  { "id": "ACC-004", "code": "2002", "name": "Salaries Payable", "type": "Liability", "balance": 45000, "status": "Active" },
+  { "id": "ACC-005", "code": "3001", "name": "Owner's Equity", "type": "Equity", "balance": 500000, "status": "Active" },
+  { "id": "ACC-006", "code": "4001", "name": "Sales Revenue", "type": "Revenue", "balance": 125000, "status": "Active" },
+  { "id": "ACC-007", "code": "5001", "name": "Rent Expense", "type": "Expense", "balance": 15000, "status": "Active" },
+  { "id": "ACC-008", "code": "5002", "name": "Salary Expense", "type": "Expense", "balance": 45000, "status": "Active" },
+  { "id": "ACC-009", "code": "5003", "name": "Office Supplies", "type": "Expense", "balance": 3500, "status": "Active" }
+]

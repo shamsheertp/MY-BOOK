@@ -1,0 +1,22 @@
+[
+  {
+    "accountId": "ACC-001",
+    "transactions": [
+      { "id": 1, "date": "2026-10-01", "ref": "JRN-2026-001", "description": "Initial capital investment", "debit": 500000, "credit": 0, "balance": 500000 },
+      { "id": 2, "date": "2026-10-05", "ref": "PAY-2026-001", "description": "Payment for supplies", "debit": 0, "credit": 15000, "balance": 485000 }
+    ]
+  },
+  {
+    "accountId": "ACC-002",
+    "transactions": [
+      { "id": 1, "date": "2026-10-02", "ref": "JRN-2026-002", "description": "Monthly rent payment", "debit": 0, "credit": 15000, "balance": -15000 },
+      { "id": 2, "date": "2026-10-03", "ref": "REC-2026-001", "description": "Payment received from customer", "debit": 125000, "credit": 0, "balance": 110000 }
+    ]
+  },
+  {
+    "accountId": "ACC-007",
+    "transactions": [
+      { "id": 1, "date": "2026-10-02", "ref": "JRN-2026-002", "description": "Monthly rent payment", "debit": 15000, "credit": 0, "balance": 15000 }
+    ]
+  }
+]

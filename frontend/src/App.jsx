@@ -16,6 +16,10 @@ import PurchaseBillDetails from './pages/Purchases/PurchaseBillDetails';
 import CreatePurchasePayment from './pages/Purchases/CreatePurchasePayment';
 import PurchasePaymentDetails from './pages/Purchases/PurchasePaymentDetails';
 import CompanyProfile from './pages/Settings/CompanyProfile';
+import Journals from './pages/Journals/Journals';
+import JournalDetails from './pages/Journals/JournalDetails';
+import Ledgers from './pages/Ledgers/Ledgers';
+import LedgerDetails from './pages/Ledgers/LedgerDetails';
 
 function App() {
   return (
@@ -37,6 +41,10 @@ function App() {
           <Route path="/purchases/payments/new" element={<CreatePurchasePayment />} />
           <Route path="/purchases/payments/:id" element={<PurchasePaymentDetails />} />
           <Route path="/purchases/:id" element={<PurchaseDetails />} />
+          <Route path="/journal" element={<Journals />} />
+          <Route path="/journal/:id" element={<JournalDetails />} />
+          <Route path="/ledger" element={<Ledgers />} />
+          <Route path="/ledgers/:id" element={<LedgerDetails />} />
           <Route path="/settings" element={<CompanyProfile />} />
           <Route path="/settings/company" element={<CompanyProfile />} />
           <Route path="*" element={<div className="text-center py-20"><h2 className="text-2xl font-bold text-slate-800">Under Construction</h2><p className="text-slate-500 mt-2">This page is part of the specs and will be built soon.</p></div>} />
