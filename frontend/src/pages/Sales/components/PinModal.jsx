@@ -1,7 +1,7 @@
 import { X, Lock } from 'lucide-react';
 import { useState } from 'react';
 
-export function PinModal({ isOpen, onClose, onConfirm }) {
+export function PinModal({ isOpen, onClose, onConfirm, message }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
@@ -24,7 +24,7 @@ export function PinModal({ isOpen, onClose, onConfirm }) {
             <Lock className="w-6 h-6" />
           </div>
           <h2 className="text-xl font-bold text-slate-800">Security Check</h2>
-          <p className="text-sm text-slate-500">Please enter Admin PIN to void this payment. (Hint: 1234)</p>
+          <p className="text-sm text-slate-500">{message || "Please enter Admin PIN to verify this action. (Hint: 1234)"}</p>
           
           <form onSubmit={handleSubmit} className="mt-4">
             <input 

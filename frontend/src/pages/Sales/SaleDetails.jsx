@@ -155,6 +155,7 @@ export default function SaleDetails() {
         isOpen={isPinModalOpen}
         onClose={() => setIsPinModalOpen(false)}
         onConfirm={handleVoidConfirm}
+        message="Please enter Admin PIN to void this payment. (Hint: 1234)"
       />
 
       <ReceiptModal 

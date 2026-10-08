@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Send, PackagePlus, FileText, CheckCircle2, AlertCircle, IndianRupee } from 'lucide-react';
+import { ArrowLeft, Printer, Send, PackagePlus, FileText, CheckCircle2, AlertCircle, IndianRupee, Trash2 } from 'lucide-react';
 import purchasesData from '../../db/purchases.json';
 import contactsData from '../../db/contacts.json';
 import { StatusBadge } from '../Dashboard/components/StatusBadge';
 import { useCompanyProfile } from '../../hooks/useCompanyProfile';
 import { ChevronRight } from 'lucide-react';
+import { PinModal } from '../Sales/components/PinModal';
 
 export default function PurchaseDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const company = useCompanyProfile();
   const [showSendMenu, setShowSendMenu] = useState(false);
+  const [, setForceUpdate] = useState(0);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   // Find the purchase by its ref (or ID fallback)
   const purchase = purchasesData.find(p => p.ref === id || p.id.toString() === id) || purchasesData[0];
@@ -48,6 +52,46 @@ export default function PurchaseDetails() {
 
   const handleCreateBill = () => {
     navigate(`/purchases/bills/new?po=${purchase.ref}`);
+  };
+
+  const handleDeleteReceipt = (receiptId, e) => {
+    e.stopPropagation();
+    setPendingDelete(() => () => {
+      purchase.items.forEach(i => i.received = 0);
+      if (purchase.receipts) purchase.receipts = purchase.receipts.filter(r => r.id !== receiptId);
+      setForceUpdate(n => n + 1);
+    });
+    setIsPinModalOpen(true);
+  };
+
+  const handleDeleteBill = (billId, e) => {
+    e.stopPropagation();
+    setPendingDelete(() => () => {
+      purchase.items.forEach(i => i.billed = 0);
+      if (purchase.bills) purchase.bills = purchase.bills.filter(b => b.id !== billId);
+      setForceUpdate(n => n + 1);
+    });
+    setIsPinModalOpen(true);
+  };
+
+  const handleDeletePayment = (paymentId, e) => {
+    e.stopPropagation();
+    setPendingDelete(() => () => {
+      if (purchase.payments) purchase.payments = purchase.payments.filter(p => p.id !== paymentId);
+      if (purchase.bills) purchase.bills.forEach(b => { b.status = 'Unpaid'; delete b.paymentDate; });
+      setForceUpdate(n => n + 1);
+    });
+    setIsPinModalOpen(true);
+  };
+
+  const handlePinConfirm = (pin) => {
+    if (pin === "1234") {
+      if (pendingDelete) pendingDelete();
+      setIsPinModalOpen(false);
+      setPendingDelete(null);
+      return "";
+    }
+    return "Incorrect PIN. Access Denied.";
   };
 
   // Determine pipeline steps
@@ -215,6 +259,7 @@ export default function PurchaseDetails() {
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Date</th>
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-center">Total Items</th>
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Status</th>
+                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 bg-white">
@@ -228,6 +273,11 @@ export default function PurchaseDetails() {
                           <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                           {receipt.status}
                         </span>
+                      </td>
+                      <td className="py-3 px-6 text-right">
+                        <button onClick={(e) => handleDeleteReceipt(receipt.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Receipt">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -270,6 +320,7 @@ export default function PurchaseDetails() {
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Payment Date</th>
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Status</th>
+                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 bg-white">
@@ -287,6 +338,11 @@ export default function PurchaseDetails() {
                         }`}>
                           {bill.status || 'Unpaid'}
                         </span>
+                      </td>
+                      <td className="py-3 px-6 text-right">
+                        <button onClick={(e) => handleDeleteBill(bill.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Bill">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -329,6 +385,7 @@ export default function PurchaseDetails() {
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Mode</th>
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider">Ref</th>
                     <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                    <th className="py-3 px-6 font-bold text-slate-500 uppercase tracking-wider text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 bg-white">
@@ -339,6 +396,11 @@ export default function PurchaseDetails() {
                       <td className="py-3 px-6 text-slate-600 font-medium">{payment.mode}</td>
                       <td className="py-3 px-6 text-slate-600 font-medium">{payment.reference}</td>
                       <td className="py-3 px-6 text-right font-black text-slate-800">{formatCurrency(payment.amount)}</td>
+                      <td className="py-3 px-6 text-right">
+                        <button onClick={(e) => handleDeletePayment(payment.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Payment">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -467,6 +529,12 @@ export default function PurchaseDetails() {
         </div>
 
       </div>
+      <PinModal 
+        isOpen={isPinModalOpen} 
+        onClose={() => { setIsPinModalOpen(false); setPendingDelete(null); }} 
+        onConfirm={handlePinConfirm} 
+        message="Please enter Admin PIN to permanently delete this record. (Hint: 1234)"
+      />
     </div>
   );
 }
