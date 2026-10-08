@@ -20,7 +20,17 @@ export default function PurchaseDetails() {
   const [expandedBills, setExpandedBills] = useState({});
 
   // Find the purchase by its ref (or ID fallback)
-  const purchase = purchasesData.find(p => p.ref === id || p.id.toString() === id) || purchasesData[0];
+  let purchase = purchasesData.find(p => p.ref === id || p.id.toString() === id) || purchasesData[0];
+  
+  // Try to load from localStorage to persist mock data across reloads
+  const savedPurchase = localStorage.getItem(`mock_purchase_${purchase.ref}`);
+  if (savedPurchase) {
+    try {
+      purchase = JSON.parse(savedPurchase);
+    } catch (e) {
+      console.error(e);
+    }
+  }
   
   // Find associated supplier
   const getCompany = (supplierId) => {
@@ -69,6 +79,7 @@ export default function PurchaseDetails() {
         // Fallback mock receipt logic
         purchase.receipts = [{ id: receiptId, date: purchase.date, itemsReceived: 0, status: 'Voided' }];
       }
+      localStorage.setItem(`mock_purchase_${purchase.ref}`, JSON.stringify(purchase));
       setForceUpdate(n => n + 1);
     });
     setPinModalMessage("Please enter Admin PIN to void this receipt. (Hint: 1234)");
@@ -85,6 +96,7 @@ export default function PurchaseDetails() {
         // Fallback mock bill logic
         purchase.bills = [{ id: billId, date: purchase.date, amount: 0, status: 'Voided' }];
       }
+      localStorage.setItem(`mock_purchase_${purchase.ref}`, JSON.stringify(purchase));
       setForceUpdate(n => n + 1);
     });
     setPinModalMessage("Please enter Admin PIN to void this bill. (Hint: 1234)");
@@ -102,6 +114,7 @@ export default function PurchaseDetails() {
           delete b.paymentDate; 
         }
       });
+      localStorage.setItem(`mock_purchase_${purchase.ref}`, JSON.stringify(purchase));
       setForceUpdate(n => n + 1);
     });
     setPinModalMessage("Please enter Admin PIN to void this payment. (Hint: 1234)");
@@ -125,6 +138,7 @@ export default function PurchaseDetails() {
         purchase.status = 'PENDING PAYMENT';
       }
       
+      localStorage.setItem(`mock_purchase_${purchase.ref}`, JSON.stringify(purchase));
       setForceUpdate(n => n + 1);
     });
     setPinModalMessage("Please enter Admin PIN to short-close this order. Unreceived items will be canceled. (Hint: 1234)");

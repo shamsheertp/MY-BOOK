@@ -9,7 +9,15 @@ export default function CreateGRN() {
   const [searchParams] = useSearchParams();
   const poRef = searchParams.get('po');
 
-  const purchase = purchasesData.find(p => p.ref === poRef) || purchasesData[0];
+  let purchase = purchasesData.find(p => p.ref === poRef) || purchasesData[0];
+  const savedPurchase = localStorage.getItem(`mock_purchase_${purchase.ref}`);
+  if (savedPurchase) {
+    try {
+      purchase = JSON.parse(savedPurchase);
+    } catch (e) {
+      console.error(e);
+    }
+  }
   
   const getCompany = (supplierId) => {
     if (!supplierId) return null;
@@ -93,6 +101,8 @@ export default function CreateGRN() {
           purchase.status = 'PARTIALLY RECEIVED';
       }
     }
+
+    localStorage.setItem(`mock_purchase_${purchase.ref}`, JSON.stringify(purchase));
 
     navigate(`/purchases/${purchase.ref}`);
   };

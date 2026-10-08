@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Printer, Download, Plus, Mail, MessageCircle, MoreVertical, Ban } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export function SaleDetailsHeader({ customerId, onPrint, onPdf, onReceivePayment, balance, status }) {
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -18,10 +19,10 @@ export function SaleDetailsHeader({ customerId, onPrint, onPdf, onReceivePayment
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between print:hidden mb-6">
-      <Link to={`/customers/${customerId}`} className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors">
+      <button onClick={() => navigate(-1)} className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors">
         <ArrowLeft className="w-4 h-4 mr-1" />
-        Back to Customer
-      </Link>
+        Back
+      </button>
       
       <div className="mt-4 sm:mt-0 flex items-center space-x-3">
         {/* Quick Action Icons */}
