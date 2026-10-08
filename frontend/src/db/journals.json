@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "ref": "JRN-2026-001",
+    "date": "2026-10-01",
+    "notes": "Initial capital investment",
+    "createdBy": "Admin User",
+    "total": 500000,
+    "entries": [
+      { "account": "Cash in Hand", "debit": 500000, "credit": 0, "contact": "" },
+      { "account": "Owner's Equity", "debit": 0, "credit": 500000, "contact": "" }
+    ]
+  },
+  {
+    "id": 2,
+    "ref": "JRN-2026-002",
+    "date": "2026-10-02",
+    "notes": "Monthly rent payment",
+    "createdBy": "Admin User",
+    "total": 15000,
+    "entries": [
+      { "account": "Rent Expense", "debit": 15000, "credit": 0, "contact": "" },
+      { "account": "Bank Account", "debit": 0, "credit": 15000, "contact": "" }
+    ]
+  },
+  {
+    "id": 3,
+    "ref": "JRN-2026-003",
+    "date": "2026-10-05",
+    "notes": "Depreciation of office equipment",
+    "createdBy": "Accountant User",
+    "total": 2500,
+    "entries": [
+      { "account": "Depreciation Expense", "debit": 2500, "credit": 0, "contact": "" },
+      { "account": "Accumulated Depreciation", "debit": 0, "credit": 2500, "contact": "" }
+    ]
+  },
+  {
+    "id": 4,
+    "ref": "JRN-2026-004",
+    "date": "2026-10-08",
+    "notes": "Adjustment for prepaid insurance",
+    "createdBy": "Accountant User",
+    "total": 1200,
+    "entries": [
+      { "account": "Insurance Expense", "debit": 1200, "credit": 0, "contact": "" },
+      { "account": "Prepaid Insurance", "debit": 0, "credit": 1200, "contact": "" }
+    ]
+  },
+  {
+    "id": 5,
+    "ref": "JRN-2026-005",
+    "date": "2026-10-10",
+    "notes": "Accrued salaries for mid-month",
+    "createdBy": "Admin User",
+    "total": 45000,
+    "entries": [
+      { "account": "Salary Expense", "debit": 45000, "credit": 0, "contact": "" },
+      { "account": "Salaries Payable", "debit": 0, "credit": 45000, "contact": "" }
+    ]
+  },
+  {
+    "id": 6,
+    "ref": "JRN-2026-006",
+    "date": "2026-10-12",
+    "notes": "Payment for office supplies",
+    "createdBy": "Admin User",
+    "total": 3500,
+    "entries": [
+      { "account": "Office Supplies", "debit": 3500, "credit": 0, "contact": "CUST-002" },
+      { "account": "Bank Account", "debit": 0, "credit": 3500, "contact": "" }
+    ]
+  }
+]
