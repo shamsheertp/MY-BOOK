@@ -9,6 +9,7 @@ export const defaultCompanyProfile = profileData;
 
 export const getCompanyProfile = () => {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return defaultCompanyProfile;
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     return saved ? { ...defaultCompanyProfile, ...saved } : defaultCompanyProfile;
   } catch {
@@ -17,11 +18,13 @@ export const getCompanyProfile = () => {
 };
 
 export const saveCompanyProfile = (profile) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
   window.dispatchEvent(new Event(EVENT_NAME));
 };
 
 export const resetCompanyProfile = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   localStorage.removeItem(STORAGE_KEY);
   window.dispatchEvent(new Event(EVENT_NAME));
 };

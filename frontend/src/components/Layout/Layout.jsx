@@ -73,7 +73,7 @@ export default function Layout({ children }) {
                 label={item.label}
                 to={item.to}
                 isChild={item.isChild}
-                isActive={location.pathname === item.to}
+                isActive={item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)}
               />
             )
           )}

@@ -33,9 +33,9 @@ export default function Contacts() {
 
   // Map db data
   const allContacts = contactsData.map((c, i) => {
-    const contactDigit = c.id.split('-')[1];
-    const customerId = `CUST-${contactDigit}`;
-    const supplierId = `SUP-${contactDigit}`;
+    const suffix = c.id && c.id.includes('-') ? c.id.substring(c.id.indexOf('-') + 1) : c.id;
+    const customerId = `CUST-${suffix}`;
+    const supplierId = `SUP-${suffix}`;
     
     const calculatedReceivables = salesData.filter(s => s.customerId === customerId).reduce((sum, s) => sum + (s.balance || 0), 0);
     const calculatedPayables = purchasesData.filter(p => p.supplierId === supplierId).reduce((sum, p) => sum + (p.balance || 0), 0);

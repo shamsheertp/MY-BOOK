@@ -3,6 +3,8 @@ import { SummaryCard } from './components/SummaryCard';
 import { StatusBadge } from './components/StatusBadge';
 import salesData from '../../db/sales.json';
 import purchasesData from '../../db/purchases.json';
+import expensesData from '../../db/expenses.json';
+import contactsData from '../../db/contacts.json';
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount || 0);
@@ -12,20 +14,44 @@ const EXCLUDED = ['VOID', 'CANCELLED', 'DRAFT'];
 export default function Dashboard() {
   const validSales = salesData.filter(s => !EXCLUDED.includes((s.status || '').toUpperCase()));
   const totalSales = validSales.reduce((sum, s) => sum + (s.total || 0), 0);
-  const totalPurchases = purchasesData.reduce((sum, p) => sum + (p.total || 0), 0);
-  const totalExpenses = 35000; // No expenses data yet
+  
+  const validPurchases = purchasesData.filter(p => !EXCLUDED.includes((p.status || '').toUpperCase()));
+  const totalPurchases = validPurchases.reduce((sum, p) => sum + (p.total || 0), 0);
+  
+  const validExpenses = expensesData.filter(e => !EXCLUDED.includes((e.status || '').toUpperCase()));
+  const totalExpenses = validExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  
   const netProfit = totalSales - totalPurchases - totalExpenses;
+  
   const toReceive = validSales.reduce((sum, s) => sum + (s.balance || 0), 0);
-  const toPay = purchasesData.reduce((sum, p) => sum + (p.balance || 0), 0);
+  const toPay = validPurchases.reduce((sum, p) => sum + (p.balance || 0), 0);
 
-  const receivables = [
-    { customer: 'John', sale: 'SALE-001', balance: '15,000', due: '20 Oct', status: 'PARTIAL' },
-    { customer: 'ABC Trading', sale: 'SALE-004', balance: '8,000', due: '15 Oct', status: 'OVERDUE' },
-  ];
+  const getContactName = (idPrefix, fullId) => {
+    if (!fullId) return 'Unknown';
+    const suffix = String(fullId).includes('-') ? String(fullId).substring(String(fullId).indexOf('-') + 1) : String(fullId);
+    const c = contactsData.find(c => c.id === `CONT-${suffix}`);
+    return c ? (c.contactName || c.companyName) : fullId;
+  };
 
-  const payables = [
-    { supplier: 'XYZ Supplier', purchase: 'PUR-001', balance: '20,000', due: '20 Oct', status: 'PARTIAL' },
-  ];
+  const receivables = validSales
+    .filter(s => (s.balance || 0) > 0)
+    .map(s => ({
+      customer: getContactName('CUST', s.customerId),
+      sale: s.invoiceNumber || s.id,
+      balance: formatCurrency(s.balance),
+      due: s.dueDate || '-',
+      status: s.status || 'UNPAID'
+    }));
+
+  const payables = validPurchases
+    .filter(p => (p.balance || 0) > 0)
+    .map(p => ({
+      supplier: getContactName('SUP', p.supplierId),
+      purchase: p.ref || p.id,
+      balance: formatCurrency(p.balance),
+      due: p.dueDate || '-',
+      status: p.status || 'UNPAID'
+    }));
 
   return (
     <div className="space-y-6">

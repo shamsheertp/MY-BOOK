@@ -142,7 +142,7 @@ export function ExpensesReport() {
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
           <span className="text-sm font-medium text-slate-500">
-            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, tableData.length)} of {tableData.length} records
+            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, expensesData.length)} of {expensesData.length} records
           </span>
           <div className="flex items-center gap-2">
             <button 

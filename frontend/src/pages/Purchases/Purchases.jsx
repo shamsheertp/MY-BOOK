@@ -20,8 +20,8 @@ export default function Purchases() {
 
   const getSupplierName = (supplierId) => {
     if (!supplierId) return '';
-    const digit = supplierId.split('-')[1];
-    const c = contactsData.find(c => c.id === `CONT-${digit}`);
+    const suffix = String(supplierId).includes('-') ? String(supplierId).substring(String(supplierId).indexOf('-') + 1) : String(supplierId);
+    const c = contactsData.find(c => c.id === `CONT-${suffix}`);
     return c?.contactName || c?.companyName || supplierId;
   };
 
