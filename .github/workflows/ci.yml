@@ -27,8 +27,14 @@ jobs:
     - name: Install dependencies
       run: npm ci || npm install
       
+    - name: Security Scan (npm audit)
+      run: npm audit --audit-level=high || true
+      
     - name: Run linting
       run: npm run lint
+      
+    - name: Run unit tests
+      run: npm run test
       
     - name: Build the app
       run: npm run build

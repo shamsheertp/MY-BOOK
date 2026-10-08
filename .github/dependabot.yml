@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Enable npm dependency updates
+  - package-ecosystem: "npm"
+    # Look for the `package.json` in the frontend directory
+    directory: "/frontend"
+    # Check for updates on a weekly basis
+    schedule:
+      interval: "weekly"
+    # Limit the number of open PRs to avoid overwhelming the repository
+    open-pull-requests-limit: 10
