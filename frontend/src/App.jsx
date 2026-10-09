@@ -26,6 +26,8 @@ import LedgerDetails from './pages/Ledgers/LedgerDetails';
 import Products from './pages/Products/Products';
 import ProductDetails from './pages/Products/ProductDetails';
 import Reports from './pages/Reports/Reports';
+import WhatsAppSettings from './pages/Settings/Connect/WhatsApp/WhatsAppSettings';
+
 
 function App() {
   return (
@@ -59,6 +61,7 @@ function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<CompanyProfile />} />
           <Route path="/settings/company" element={<CompanyProfile />} />
+          <Route path="/settings/connect/whatsapp" element={<WhatsAppSettings />} />
           <Route path="*" element={<div className="text-center py-20"><h2 className="text-2xl font-bold text-slate-800">Under Construction</h2><p className="text-slate-500 mt-2">This page is part of the specs and will be built soon.</p></div>} />
         </Routes>
       </Layout>

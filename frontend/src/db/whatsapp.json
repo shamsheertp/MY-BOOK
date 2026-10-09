@@ -1,0 +1,14 @@
+{
+  "config": {
+    "apiKey": "EAAZAwaTTNBl8BSm9a9EG5ctSHFobh5bSJqZABRj5ZAgQRys2qQeSsFCwJy3Evq3ZASr8NNBZAaCQo8qIPqLQRTYERV2VTZAABYqKV56kPhVkgWnDlCHTHFsGwuTOMfor07LPT3OhQSCSFdZCBeM7y7E0rz9aDYWVnwziCvt9s5cYbxdSngUDAZAyZCFaeaZBIzPm4R1xZB2A8bEKOZBe6KdvbhZAIlkNblfHqauFgBW4iB1aY65toMdJwNUrmU4lH5AZACceZA1VWPbYYhzcMxOxbQbpGbNT0kZD",
+    "phoneNumberId": "1275493648989938",
+    "businessAccountId": "1421043520209874"
+  },
+  "preferences": {
+    "sendInvoices": true,
+    "sendReceipts": true,
+    "sendReminders": false,
+    "sharePdf": true,
+    "sharePictures": true
+  }
+}

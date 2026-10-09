@@ -1,16 +1,68 @@
-import { X, Download, Share2, Receipt, Printer } from 'lucide-react';
+import { useState } from 'react';
+import { X, Download, Share2, Receipt, Printer, Loader2, MessageCircle } from 'lucide-react';
 import { useCompanyProfile, formatAddressLines } from '../../../hooks/useCompanyProfile';
+import { sendWhatsAppMessage, openWhatsAppFallback, uploadWhatsAppMedia } from '../../../hooks/useWhatsApp';
+import jsPDF from 'jspdf';
+import domtoimage from 'dom-to-image-more';
 
-export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, formatCurrency, balance }) {
+export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, customerPhone, formatCurrency, balance }) {
   const company = useCompanyProfile();
+  const [isSharing, setIsSharing] = useState(false);
+
   if (!isOpen || !payment) return null;
 
+  const handleShare = async () => {
+    if (!customerPhone) {
+      alert("No phone number found for this customer.");
+      return;
+    }
+    
+    setIsSharing(true);
+    try {
+      const element = document.getElementById('receipt-document-capture');
+      if (!element) {
+        throw new Error("Receipt document element not found.");
+      }
+
+      // Capture the element using dom-to-image-more
+      const imgData = await domtoimage.toPng(element, {
+        quality: 1.0,
+        bgcolor: '#ffffff'
+      });
+
+      // Create PDF and add image
+      const pdf = new jsPDF('p', 'mm', 'a5'); // A5 size for receipts is usually better
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (element.clientHeight * pdfWidth) / element.clientWidth;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      
+      const pdfBlob = pdf.output('blob');
+      
+      // 2. Upload to WhatsApp
+      const filename = `Receipt_${payment.ref || saleRef}.pdf`;
+      const mediaId = await uploadWhatsAppMedia(pdfBlob, filename);
+
+      // 3. Send message
+      const message = `Hello ${customerName}! Here is the receipt for your payment of ${formatCurrency(payment.amount)}.`;
+      await sendWhatsAppMessage(customerPhone, message, 'document', mediaId, filename);
+      
+      alert('Receipt PDF sent successfully via WhatsApp API!');
+    } catch (error) {
+      console.warn("API failed, falling back to wa.me link:", error);
+      const fallbackMessage = `Hello ${customerName}! Here is the receipt for your payment of ${formatCurrency(payment.amount)} (Ref: ${payment.ref}). Balance due: ${formatCurrency(balance)}.`;
+      openWhatsAppFallback(customerPhone, fallbackMessage);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in print:static print:inset-auto print:bg-white print:p-0">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 print:shadow-none print:w-auto print:max-w-none">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50 print:hidden">
           <div className="flex items-center space-x-2 text-indigo-600">
             <Receipt className="w-5 h-5" />
             <h2 className="text-sm font-bold uppercase tracking-wider">Payment Receipt</h2>
@@ -21,8 +73,8 @@ export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, 
         </div>
         
         {/* Thermal Receipt Design */}
-        <div className="bg-slate-200 p-4 sm:p-8 flex justify-center">
-          <div className="bg-white w-full max-w-xs shadow-md relative" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
+        <div className="bg-slate-200 p-4 sm:p-8 flex justify-center print:bg-white print:p-0 print:block">
+          <div id="receipt-document-capture" className="bg-white w-full max-w-xs shadow-md relative print:shadow-none print:max-w-none print:w-auto print:mx-auto" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
             
             {/* Top jagged edge */}
             <div className="absolute top-0 left-0 right-0 h-2 bg-repeat-x" style={{ backgroundImage: 'radial-gradient(circle at 50% 0, transparent 50%, white 51%), radial-gradient(circle at 50% 100%, white 50%, transparent 51%)', backgroundSize: '10px 10px', backgroundPosition: '0 -5px' }}></div>
@@ -105,7 +157,7 @@ export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, 
         </div>
         
         {/* Actions */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-2 print:hidden">
           <button 
             onClick={() => window.print()}
             className="flex-1 flex items-center justify-center py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
@@ -114,17 +166,11 @@ export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, 
             Print
           </button>
           <button 
-            onClick={() => alert('Downloading Receipt PDF...')}
-            className="flex-1 flex items-center justify-center py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+            onClick={handleShare}
+            disabled={isSharing}
+            className="flex-1 flex items-center justify-center py-2.5 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors shadow-sm shadow-green-200 disabled:opacity-50"
           >
-            <Download className="w-4 h-4 mr-1.5 text-slate-500" />
-            PDF
-          </button>
-          <button 
-            onClick={() => alert('Opening share dialog...')}
-            className="flex-1 flex items-center justify-center py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
-          >
-            <Share2 className="w-4 h-4 mr-1.5" />
+            {isSharing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <MessageCircle className="w-4 h-4 mr-1.5" />}
             Share
           </button>
         </div>

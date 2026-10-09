@@ -108,6 +108,8 @@ export default function CreatePurchasePayment() {
       updatedPurchase.status = 'COMPLETED';
     }
 
+    localStorage.setItem(`mock_purchase_${updatedPurchase.ref}`, JSON.stringify(updatedPurchase));
+
     console.log("Mock saved data:", updatedPurchase);
     navigate(`/purchases/${updatedPurchase.ref}`);
   };

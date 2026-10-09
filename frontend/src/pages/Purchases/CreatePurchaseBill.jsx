@@ -91,6 +91,8 @@ export default function CreatePurchaseBill() {
       }
     }
 
+    localStorage.setItem(`mock_purchase_${purchase.ref}`, JSON.stringify(purchase));
+
     navigate(`/purchases/${purchase.ref}`);
   };
 

@@ -7,7 +7,7 @@ export function InvoiceDocument({ sale, customer, subtotal, discount, tax, total
   const showBank = company.showBankOnInvoice && (company.bankName || company.accountNumber || company.upiId);
 
   return (
-      <div className="glass-card bg-white/95 rounded-2xl shadow-xl overflow-hidden border border-white print:border-none print:shadow-none print:bg-white print:rounded-none">
+      <div id="invoice-document-capture" className="glass-card bg-white/95 rounded-2xl shadow-xl overflow-hidden border border-white print:border-none print:shadow-none print:bg-white print:rounded-none">
         <div className="p-10 border-b border-slate-100 bg-slate-50/50 print:p-4 print:pb-2 print:border-b-2">
           <div className="flex flex-col md:flex-row justify-between items-start">
             <div className="mb-8 md:mb-0 print:mb-2">

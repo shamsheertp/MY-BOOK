@@ -10,6 +10,7 @@ import { ReceivePaymentModal } from './components/ReceivePaymentModal';
 import { PinModal } from './components/PinModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { ProofModal } from './components/ProofModal';
+import { WhatsAppPreviewModal } from './components/WhatsAppPreviewModal';
 
 export default function SaleDetails() {
   const { id } = useParams();
@@ -55,6 +56,8 @@ export default function SaleDetails() {
   
   const [isProofModalOpen, setIsProofModalOpen] = useState(false);
   const [selectedProof, setSelectedProof] = useState(null);
+
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
 
   const handleViewReceipt = (payment) => {
     setSelectedReceipt(payment);
@@ -110,37 +113,42 @@ export default function SaleDetails() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12 print:pb-0 print:m-0 print:space-y-0">
       
-      <SaleDetailsHeader 
-        customerId={customer.id} 
-        onPrint={handlePrint} 
-        onPdf={handlePdf} 
-        onReceivePayment={() => setIsPaymentModalOpen(true)}
-        balance={balance}
-        status={sale.status}
-      />
+      {/* Main Content Wrapper - Hidden when Receipt Modal is open to prevent overlapping prints */}
+      <div className={isReceiptModalOpen ? 'print:hidden' : ''}>
+        <SaleDetailsHeader 
+          customer={customer}
+          sale={sale}
+          onPrint={handlePrint} 
+          onPdf={handlePdf} 
+          onReceivePayment={() => setIsPaymentModalOpen(true)}
+          onWhatsApp={() => setIsWhatsAppModalOpen(true)}
+          balance={balance}
+          status={sale.status}
+        />
 
-      <PaymentSummary 
-        sale={sale} 
-        paymentsList={paymentsList} 
-        balance={balance} 
-        received={received} 
-        total={total} 
-        formatCurrency={formatCurrency}
-        onVoidPayment={handleVoidPayment}
-        onViewReceipt={handleViewReceipt}
-        onViewProof={handleViewProof}
-        onUploadProof={handleUploadProof}
-      />
+        <PaymentSummary 
+          sale={sale} 
+          paymentsList={paymentsList} 
+          balance={balance} 
+          received={received} 
+          total={total} 
+          formatCurrency={formatCurrency}
+          onVoidPayment={handleVoidPayment}
+          onViewReceipt={handleViewReceipt}
+          onViewProof={handleViewProof}
+          onUploadProof={handleUploadProof}
+        />
 
-      <InvoiceDocument 
-        sale={sale} 
-        customer={customer} 
-        subtotal={subtotal} 
-        discount={discount} 
-        tax={tax} 
-        total={total} 
-        formatCurrency={formatCurrency} 
-      />
+        <InvoiceDocument 
+          sale={sale} 
+          customer={customer} 
+          subtotal={subtotal} 
+          discount={discount} 
+          tax={tax} 
+          total={total} 
+          formatCurrency={formatCurrency} 
+        />
+      </div>
 
       <ReceivePaymentModal 
         isOpen={isPaymentModalOpen} 
@@ -164,6 +172,7 @@ export default function SaleDetails() {
         payment={selectedReceipt}
         saleRef={sale.ref}
         customerName={customer.name}
+        customerPhone={customer.phone}
         formatCurrency={formatCurrency}
         balance={balance}
       />
@@ -172,6 +181,13 @@ export default function SaleDetails() {
         isOpen={isProofModalOpen}
         onClose={() => setIsProofModalOpen(false)}
         payment={selectedProof}
+      />
+
+      <WhatsAppPreviewModal
+        isOpen={isWhatsAppModalOpen}
+        onClose={() => setIsWhatsAppModalOpen(false)}
+        customer={customer}
+        sale={sale}
       />
     </div>
   );
