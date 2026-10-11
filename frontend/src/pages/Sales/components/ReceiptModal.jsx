@@ -9,15 +9,18 @@ export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, 
   const company = useCompanyProfile();
   const [isSharing, setIsSharing] = useState(false);
 
+  const [shareFeedback, setShareFeedback] = useState(null);
+
   if (!isOpen || !payment) return null;
 
   const handleShare = async () => {
     if (!customerPhone) {
-      alert("No phone number found for this customer.");
+      setShareFeedback({ type: 'error', text: 'No phone number for customer.' });
       return;
     }
     
     setIsSharing(true);
+    setShareFeedback(null);
     try {
       const element = document.getElementById('receipt-document-capture');
       if (!element) {
@@ -26,12 +29,12 @@ export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, 
 
       // Capture the element using dom-to-image-more
       const imgData = await domtoimage.toPng(element, {
-        quality: 1.0,
+        quality: 0.95,
         bgcolor: '#ffffff'
       });
 
       // Create PDF and add image
-      const pdf = new jsPDF('p', 'mm', 'a5'); // A5 size for receipts is usually better
+      const pdf = new jsPDF('p', 'mm', 'a5');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (element.clientHeight * pdfWidth) / element.clientWidth;
       
@@ -39,19 +42,20 @@ export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, 
       
       const pdfBlob = pdf.output('blob');
       
-      // 2. Upload to WhatsApp
+      // Upload to WhatsApp
       const filename = `Receipt_${payment.ref || saleRef}.pdf`;
       const mediaId = await uploadWhatsAppMedia(pdfBlob, filename);
 
-      // 3. Send message
+      // Send message
       const message = `Hello ${customerName}! Here is the receipt for your payment of ${formatCurrency(payment.amount)}.`;
       await sendWhatsAppMessage(customerPhone, message, 'document', mediaId, filename);
       
-      alert('Receipt PDF sent successfully via WhatsApp API!');
+      setShareFeedback({ type: 'success', text: 'Receipt sent via WhatsApp!' });
     } catch (error) {
       console.warn("API failed, falling back to wa.me link:", error);
       const fallbackMessage = `Hello ${customerName}! Here is the receipt for your payment of ${formatCurrency(payment.amount)} (Ref: ${payment.ref}). Balance due: ${formatCurrency(balance)}.`;
       openWhatsAppFallback(customerPhone, fallbackMessage);
+      setShareFeedback({ type: 'info', text: 'Opened in WhatsApp Web' });
     } finally {
       setIsSharing(false);
     }
@@ -156,6 +160,16 @@ export function ReceiptModal({ isOpen, onClose, payment, saleRef, customerName, 
           </div>
         </div>
         
+        {/* Feedback Message */}
+        {shareFeedback && (
+          <div className={`mx-4 mb-2 p-2 rounded-lg text-xs font-semibold text-center ${
+            shareFeedback.type === 'success' ? 'bg-green-100 text-green-700' : 
+            shareFeedback.type === 'error' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
+          }`}>
+            {shareFeedback.text}
+          </div>
+        )}
+
         {/* Actions */}
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-2 print:hidden">
           <button 

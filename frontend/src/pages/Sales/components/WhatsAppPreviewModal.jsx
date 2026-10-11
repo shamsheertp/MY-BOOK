@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, Send, Loader2, CheckCircle, FileText } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Send, Loader2, CheckCircle, FileText, AlertTriangle, ExternalLink } from 'lucide-react';
 import jsPDF from 'jspdf';
 import domtoimage from 'dom-to-image-more';
 import { uploadWhatsAppMedia, sendWhatsAppMessage, openWhatsAppFallback } from '../../../hooks/useWhatsApp';
@@ -7,18 +7,50 @@ import { uploadWhatsAppMedia, sendWhatsAppMessage, openWhatsAppFallback } from '
 export function WhatsAppPreviewModal({ isOpen, onClose, customer, sale }) {
   const [isSending, setIsSending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [additionalText, setAdditionalText] = useState("");
+  const autoCloseTimerRef = useRef(null);
+
+  // Cleanly reset state whenever modal is opened or closed
+  useEffect(() => {
+    if (isOpen) {
+      setIsSending(false);
+      setIsSuccess(false);
+      setErrorMessage("");
+      setAdditionalText("");
+    }
+    return () => {
+      if (autoCloseTimerRef.current) {
+        clearTimeout(autoCloseTimerRef.current);
+      }
+    };
+  }, [isOpen]);
+
+  // Handle ESC key press
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !isSending) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSending, onClose]);
 
   if (!isOpen) return null;
 
+  const phone = customer?.phone || "";
+
   const handleSend = async () => {
-    const phone = customer?.phone;
     if (!phone) {
-      alert("No phone number found for this customer.");
+      setErrorMessage("No phone number found for this customer.");
       return;
     }
 
     setIsSending(true);
+    setErrorMessage("");
+
     try {
       const element = document.getElementById('invoice-document-capture');
       if (!element) {
@@ -27,7 +59,7 @@ export function WhatsAppPreviewModal({ isOpen, onClose, customer, sale }) {
 
       // Capture the element using dom-to-image-more
       const imgData = await domtoimage.toPng(element, {
-        quality: 1.0,
+        quality: 0.95,
         bgcolor: '#ffffff'
       });
 
@@ -51,22 +83,35 @@ export function WhatsAppPreviewModal({ isOpen, onClose, customer, sale }) {
       await sendWhatsAppMessage(phone, finalMessage, 'document', mediaId, filename);
       
       setIsSuccess(true);
-      setTimeout(() => {
+      autoCloseTimerRef.current = setTimeout(() => {
+        setIsSending(false);
         setIsSuccess(false);
         onClose();
-        setAdditionalText("");
-      }, 2500);
+      }, 2000);
 
     } catch (error) {
-      console.warn("API failed, falling back to wa.me link:", error);
-      const fallbackMessage = `Hello ${customer.name}! Here is your invoice link for ${sale.ref}: ${window.location.href}`;
-      openWhatsAppFallback(phone, fallbackMessage);
+      console.warn("WhatsApp API failed:", error);
+      setErrorMessage(error.message || "Failed to send via WhatsApp API.");
+    } finally {
       setIsSending(false);
     }
   };
 
+  const handleFallbackOpen = () => {
+    const fallbackMessage = `Hello ${customer?.name || 'Customer'}! Here is your invoice link for ${sale?.ref}: ${window.location.href}`;
+    openWhatsAppFallback(phone, fallbackMessage);
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSending) {
+          onClose();
+        }
+      }}
+    >
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
         <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
           <div className="flex items-center space-x-2 text-indigo-600">
@@ -75,7 +120,7 @@ export function WhatsAppPreviewModal({ isOpen, onClose, customer, sale }) {
           </div>
           <button 
             onClick={onClose} 
-            disabled={isSending || isSuccess}
+            disabled={isSending}
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
           >
             <X className="w-4 h-4" />
@@ -91,8 +136,29 @@ export function WhatsAppPreviewModal({ isOpen, onClose, customer, sale }) {
             <p className="text-slate-500">The invoice has been sent to {customer?.name}.</p>
           </div>
         ) : (
-          <div className="p-6 space-y-6">
-            
+          <div className="p-6 space-y-5">
+            {/* Error Message banner */}
+            {errorMessage && (
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center space-x-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div>
+                    <strong className="block font-semibold">Sending Issue</strong>
+                    <span>{errorMessage}</span>
+                  </div>
+                </div>
+                {phone && (
+                  <button
+                    onClick={handleFallbackOpen}
+                    className="inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shadow-sm transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                    Open WhatsApp Web
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Invoice Preview Mockup */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-start space-x-4">
               <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 text-red-500">
@@ -119,7 +185,8 @@ export function WhatsAppPreviewModal({ isOpen, onClose, customer, sale }) {
                 onChange={(e) => setAdditionalText(e.target.value)}
                 placeholder="Type any additional instructions or thank you note here..."
                 rows={3}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all resize-none text-sm"
+                disabled={isSending}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all resize-none text-sm disabled:opacity-60 disabled:bg-slate-50"
               />
             </div>
 

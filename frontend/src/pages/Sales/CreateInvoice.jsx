@@ -7,7 +7,7 @@ import { CustomerModal } from '../Contacts/components/CustomerModal';
 export default function CreateInvoice() {
   const navigate = useNavigate();
   const [showCustomerModal, setShowCustomerModal] = useState(false);
-  
+
   const [invoice, setInvoice] = useState(() => ({
     customerId: '',
     ref: `SALE-${new Date().getFullYear()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
@@ -58,21 +58,21 @@ export default function CreateInvoice() {
             <p className="text-sm text-slate-500 mt-1 font-medium">Create and issue a new sales invoice</p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-3">
-          <button 
+          <button
             onClick={() => navigate('/sales')}
             className="px-5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm transition-colors"
           >
             Cancel
           </button>
-          <button 
+          <button
             onClick={() => navigate('/sales/6')}
             className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow-sm shadow-slate-200 transition-colors"
           >
             Save as Draft
           </button>
-          <button 
+          <button
             onClick={() => navigate('/sales/5')}
             className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm shadow-indigo-200 transition-colors"
           >
@@ -93,9 +93,9 @@ export default function CreateInvoice() {
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <User className="w-5 h-5 text-indigo-400 group-focus-within:text-indigo-600 transition-colors" />
                   </div>
-                  <select 
+                  <select
                     value={invoice.customerId}
-                    onChange={(e) => setInvoice({...invoice, customerId: e.target.value})}
+                    onChange={(e) => setInvoice({ ...invoice, customerId: e.target.value })}
                     className="w-full pl-12 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-sm appearance-none"
                   >
                     <option value="" disabled className="font-normal text-slate-400">Select a customer...</option>
@@ -104,7 +104,7 @@ export default function CreateInvoice() {
                     ))}
                   </select>
                 </div>
-                <button 
+                <button
                   onClick={() => setShowCustomerModal(true)}
                   className="flex items-center justify-center w-[50px] h-[50px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 rounded-xl transition-colors border border-indigo-100 flex-shrink-0 shadow-sm"
                   title="Add New Customer"
@@ -122,7 +122,7 @@ export default function CreateInvoice() {
                 {invoice.ref}
               </div>
             </div>
-            
+
             <div className="lg:col-span-2 space-y-2">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Issue Date</label>
               <div className="flex items-center text-slate-700 font-medium h-[50px]">
@@ -137,7 +137,7 @@ export default function CreateInvoice() {
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Calendar className="w-4 h-4 text-rose-400 group-focus-within:text-rose-500" />
                 </div>
-                <input type="date" value={invoice.dueDate} onChange={(e) => setInvoice({...invoice, dueDate: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all shadow-sm" />
+                <input type="date" value={invoice.dueDate} onChange={(e) => setInvoice({ ...invoice, dueDate: e.target.value })} className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all shadow-sm" />
               </div>
             </div>
           </div>
@@ -150,8 +150,8 @@ export default function CreateInvoice() {
               <thead>
                 <tr className="border-b-2 border-slate-200">
                   <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/2">Description</th>
-                  <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-24 text-center">Qty</th>
-                  <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 text-right">Price</th>
+                  <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-24 text-center">KG</th>
+                  <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 text-right">Price /KG</th>
                   <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 text-right">Amount</th>
                   <th className="py-3 w-10"></th>
                 </tr>
@@ -160,8 +160,8 @@ export default function CreateInvoice() {
                 {items.map((item) => (
                   <tr key={item.id} className="group">
                     <td className="py-3 px-2">
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="Item description..."
                         value={item.name}
                         onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
@@ -169,8 +169,8 @@ export default function CreateInvoice() {
                       />
                     </td>
                     <td className="py-3 px-2">
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         min="1"
                         value={item.qty}
                         onChange={(e) => handleItemChange(item.id, 'qty', e.target.value)}
@@ -179,8 +179,8 @@ export default function CreateInvoice() {
                     </td>
                     <td className="py-3 px-2 relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium pointer-events-none">₹</span>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         min="0"
                         value={item.price}
                         onChange={(e) => handleItemChange(item.id, 'price', e.target.value)}
@@ -193,7 +193,7 @@ export default function CreateInvoice() {
                       </div>
                     </td>
                     <td className="py-3 pl-2 text-right">
-                      <button 
+                      <button
                         onClick={() => removeItem(item.id)}
                         className="p-2.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
                         disabled={items.length === 1}
@@ -207,7 +207,7 @@ export default function CreateInvoice() {
             </table>
           </div>
 
-          <button 
+          <button
             onClick={addItem}
             className="mt-4 flex items-center text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-4 py-2.5 rounded-xl transition-colors"
           >
@@ -220,12 +220,12 @@ export default function CreateInvoice() {
         <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-col md:flex-row justify-between items-start gap-8">
           <div className="w-full md:w-1/2 space-y-2">
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Notes / Terms</label>
-            <textarea 
-              rows="3" 
+            <textarea
+              rows="3"
               placeholder="Add payment instructions or notes for the customer..."
               className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none shadow-sm"
               value={invoice.notes}
-              onChange={(e) => setInvoice({...invoice, notes: e.target.value})}
+              onChange={(e) => setInvoice({ ...invoice, notes: e.target.value })}
             ></textarea>
           </div>
 
@@ -234,13 +234,13 @@ export default function CreateInvoice() {
               <span className="font-medium">Subtotal</span>
               <span className="font-bold text-slate-800">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
-            
+
             <div className="flex justify-between items-center text-slate-600">
               <span className="font-medium">Discount (₹)</span>
               <div className="relative w-32">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium pointer-events-none">₹</span>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={discount}
                   onChange={(e) => setDiscount(Number(e.target.value))}
                   className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-right font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all"
@@ -252,8 +252,8 @@ export default function CreateInvoice() {
               <span className="font-medium">Tax (%)</span>
               <div className="relative w-32">
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium pointer-events-none">%</span>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={taxPercent}
                   onChange={(e) => setTaxPercent(Number(e.target.value))}
                   className="w-full pr-8 pl-3 py-2 bg-white border border-slate-200 rounded-xl text-right font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all"

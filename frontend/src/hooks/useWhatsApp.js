@@ -24,22 +24,31 @@ export const uploadWhatsAppMedia = async (blob, filename) => {
 
   const formData = new FormData();
   formData.append('file', blob, filename);
+  formData.append('type', 'document');
   formData.append('messaging_product', 'whatsapp');
 
-  const response = await fetch(`https://graph.facebook.com/v25.0/${config.phoneNumberId}/media`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${config.apiKey}`
-    },
-    body: formData
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-  const data = await response.json();
-  if (!response.ok) {
-    console.error("WhatsApp Media Upload Error:", data);
-    throw new Error(data.error?.message || "Failed to upload media");
+  try {
+    const response = await fetch(`https://graph.facebook.com/v25.0/${config.phoneNumberId}/media`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: formData,
+      signal: controller.signal
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("WhatsApp Media Upload Error:", data);
+      throw new Error(data.error?.message || "Failed to upload media");
+    }
+    return data.id;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return data.id;
 };
 
 export const sendWhatsAppMessage = async (to, message, type = 'template', mediaLinkOrId = null, filename = null) => {
@@ -79,21 +88,29 @@ export const sendWhatsAppMessage = async (to, message, type = 'template', mediaL
     payload.text = { body: message };
   }
 
-  const response = await fetch(`https://graph.facebook.com/v25.0/${config.phoneNumberId}/messages`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload)
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-  const data = await response.json();
-  if (!response.ok) {
-    console.error("WhatsApp API Error:", data);
-    throw new Error(data.error?.message || "Failed to send message via API");
+  try {
+    const response = await fetch(`https://graph.facebook.com/v25.0/${config.phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("WhatsApp API Error:", data);
+      throw new Error(data.error?.message || "Failed to send message via API");
+    }
+    return data;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return data;
 };
 
 export const openWhatsAppFallback = (to, message) => {
