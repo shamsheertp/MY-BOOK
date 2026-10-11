@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, Plus, Filter, ChevronLeft, ChevronRight, Mail, Download, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { CustomerModal } from './components/CustomerModal';
@@ -31,49 +31,60 @@ export default function Contacts() {
     }).format(amount);
   };
 
-  // Map db data
-  const allContacts = contactsData.map((c, i) => {
-    const suffix = c.id && c.id.includes('-') ? c.id.substring(c.id.indexOf('-') + 1) : c.id;
-    const customerId = `CUST-${suffix}`;
-    const supplierId = `SUP-${suffix}`;
-    
-    const calculatedReceivables = salesData.filter(s => s.customerId === customerId).reduce((sum, s) => sum + (s.balance || 0), 0);
-    const calculatedPayables = purchasesData.filter(p => p.supplierId === supplierId).reduce((sum, p) => sum + (p.balance || 0), 0);
+  // Map db data once using useMemo to avoid re-calculating on every keystroke
+  const allContacts = useMemo(() => {
+    return contactsData.map((c, i) => {
+      const suffix = c.id && c.id.includes('-') ? c.id.substring(c.id.indexOf('-') + 1) : c.id;
+      const customerId = `CUST-${suffix}`;
+      const supplierId = `SUP-${suffix}`;
+      
+      const calculatedReceivables = salesData.filter(s => s.customerId === customerId).reduce((sum, s) => sum + (s.balance || 0), 0);
+      const calculatedPayables = purchasesData.filter(p => p.supplierId === supplierId).reduce((sum, p) => sum + (p.balance || 0), 0);
 
-    return {
-      id: c.id,
-      name: c.contactName,
-      company: c.companyName,
-      email: c.email,
-      phone: c.phone,
-      type: c.type,
-      status: c.status,
-      receivables: formatCurrency(calculatedReceivables),
-      payables: formatCurrency(calculatedPayables),
-      rawReceivables: calculatedReceivables,
-      rawPayables: calculatedPayables,
-      avatar: c.avatar,
-      initials: c.contactName.split(' ').map(n => n[0]).join('') || 'CO',
-      color: ['bg-emerald-100 text-emerald-700', 'bg-blue-100 text-blue-700', 'bg-purple-100 text-purple-700', 'bg-amber-100 text-amber-700'][i % 4]
-    };
-  });
+      return {
+        id: c.id,
+        name: c.contactName,
+        company: c.companyName,
+        email: c.email,
+        phone: c.phone,
+        type: c.type,
+        status: c.status,
+        receivables: formatCurrency(calculatedReceivables),
+        payables: formatCurrency(calculatedPayables),
+        rawReceivables: calculatedReceivables,
+        rawPayables: calculatedPayables,
+        avatar: c.avatar,
+        initials: c.contactName.split(' ').map(n => n[0]).join('') || 'CO',
+        color: ['bg-emerald-100 text-emerald-700', 'bg-blue-100 text-blue-700', 'bg-purple-100 text-purple-700', 'bg-amber-100 text-amber-700'][i % 4]
+      };
+    });
+  }, []);
 
-  const filteredContacts = allContacts.filter(contact => {
-    const matchesName = contact.name.toLowerCase().includes(filters.name.toLowerCase());
-    const matchesCompany = contact.company.toLowerCase().includes(filters.company.toLowerCase());
-    const matchesEmail = contact.email.toLowerCase().includes(filters.email.toLowerCase());
-    const matchesPhone = contact.phone.includes(filters.phone);
-    const matchesType = filters.type === 'All' || contact.type === filters.type;
-    
-    let matchesStatus = true;
-    if (filters.status === 'With Outstanding') {
-      matchesStatus = contact.rawReceivables > 0 || contact.rawPayables > 0;
-    } else if (filters.status === 'Fully Paid') {
-      matchesStatus = contact.rawReceivables === 0 && contact.rawPayables === 0;
-    }
+  const filteredContacts = useMemo(() => {
+    const qName = filters.name.toLowerCase();
+    const qCompany = filters.company.toLowerCase();
+    const qEmail = filters.email.toLowerCase();
+    const qPhone = filters.phone;
+    const filterType = filters.type;
+    const filterStatus = filters.status;
 
-    return matchesName && matchesCompany && matchesEmail && matchesPhone && matchesType && matchesStatus;
-  });
+    return allContacts.filter(contact => {
+      const matchesName = !qName || contact.name.toLowerCase().includes(qName);
+      const matchesCompany = !qCompany || contact.company.toLowerCase().includes(qCompany);
+      const matchesEmail = !qEmail || contact.email.toLowerCase().includes(qEmail);
+      const matchesPhone = !qPhone || contact.phone.includes(qPhone);
+      const matchesType = filterType === 'All' || contact.type === filterType;
+      
+      let matchesStatus = true;
+      if (filterStatus === 'With Outstanding') {
+        matchesStatus = contact.rawReceivables > 0 || contact.rawPayables > 0;
+      } else if (filterStatus === 'Fully Paid') {
+        matchesStatus = contact.rawReceivables === 0 && contact.rawPayables === 0;
+      }
+
+      return matchesName && matchesCompany && matchesEmail && matchesPhone && matchesType && matchesStatus;
+    });
+  }, [allContacts, filters]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredContacts.length / recordsPerPage);

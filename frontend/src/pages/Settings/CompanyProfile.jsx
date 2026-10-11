@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useDeferredValue } from 'react';
+import { useState, useRef, useEffect, useDeferredValue, useCallback, memo } from 'react';
 import {
   Building2, Mail, Phone, Globe, MapPin, FileText, Landmark, Receipt,
   Upload, Trash2, Save, RotateCcw, CheckCircle2, ImageIcon, Loader2
@@ -9,7 +9,7 @@ import {
 } from '../../hooks/useCompanyProfile';
 import { companyService } from '../../services/api';
 
-function Section({ icon: Icon, title, description, children }) {
+const Section = memo(function Section({ icon: Icon, title, description, children }) {
   return (
     <div className="glass-card rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-100 bg-white/50 flex items-center">
@@ -24,27 +24,27 @@ function Section({ icon: Icon, title, description, children }) {
       <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white/40">{children}</div>
     </div>
   );
-}
+});
 
-function Field({ label, name, value, onChange, placeholder, full, type = 'text', textarea, icon: Icon, required, error }) {
-  const base = `w-full ${Icon ? 'pl-10' : 'pl-3'} pr-3 py-2.5 border rounded-xl bg-white/70 text-sm outline-none transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${error ? 'border-rose-300' : 'border-slate-200'}`;
+const Field = memo(function Field({ label, name, value, onChange, placeholder, full, type = 'text', textarea, icon: Icon, required, error }) {
+  const base = `w-full ${Icon ? 'pl-10' : 'pl-3'} pr-3 py-2.5 border rounded-xl bg-white text-sm outline-none transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${error ? 'border-rose-300' : 'border-slate-200'}`;
   return (
     <div className={full ? 'sm:col-span-2' : ''}>
       <label htmlFor={`cp-${name}`} className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
         {label} {required && <span className="text-rose-500">*</span>}
       </label>
       <div className="relative">
-        {Icon && <Icon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />}
+        {Icon && <Icon className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />}
         {textarea ? (
-          <textarea id={`cp-${name}`} name={name} value={value} onChange={onChange} placeholder={placeholder} rows={3} className={`${base} resize-none`} />
+          <textarea id={`cp-${name}`} name={name} value={value || ''} onChange={onChange} placeholder={placeholder} rows={3} className={`${base} resize-none`} />
         ) : (
-          <input id={`cp-${name}`} type={type} name={name} value={value} onChange={onChange} placeholder={placeholder} className={base} />
+          <input id={`cp-${name}`} type={type} name={name} value={value || ''} onChange={onChange} placeholder={placeholder} className={base} />
         )}
       </div>
       {error && <p className="text-xs text-rose-500 mt-1">{error}</p>}
     </div>
   );
-}
+});
 
 
 export default function CompanyProfile() {
@@ -70,13 +70,13 @@ export default function CompanyProfile() {
     return () => { isMounted = false; };
   }, []);
 
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
     const { name, value, type, checked } = e.target;
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
     setErrors(er => ({ ...er, [name]: undefined }));
     setIsDirty(true);
     setSaved(false);
-  };
+  }, []);
 
   const handleLogo = (e) => {
     const file = e.target.files?.[0];

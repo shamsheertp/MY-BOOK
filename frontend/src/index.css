@@ -34,21 +34,15 @@ body::before {
 }
 
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-  transform: translateZ(0);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.90);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
-  transform: translateZ(0);
+  background: #ffffff;
+  border: 1px solid rgba(241, 245, 249, 1);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
 }
 
 .glass-card-hover {
@@ -60,25 +54,16 @@ body::before {
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
 }
 
-/* Fast typing & input rendering optimizations */
+/* Ensure smooth native typing without layout or paint stalls */
 input, textarea, select {
-  contain: paint;
+  font-family: inherit;
 }
 
-
 .animated-gradient-text {
-  background: linear-gradient(to right, #4f46e5, #0ea5e9, #8b5cf6);
+  background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 50%, #8b5cf6 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  background-size: 200% auto;
-  animation: textShine 4s linear infinite;
-}
-
-@keyframes textShine {
-  to {
-    background-position: 200% center;
-  }
 }
 
 .custom-scrollbar::-webkit-scrollbar {

@@ -1,9 +1,57 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import { ArrowLeft, Plus, Trash2, Calendar, FileText, User } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import contactsData from '../../db/contacts.json';
 import purchasesData from '../../db/purchases.json';
 import { CustomerModal } from '../Contacts/components/CustomerModal';
+
+const PurchaseItemRow = memo(function PurchaseItemRow({ item, index, totalItems, onChange, onRemove }) {
+  return (
+    <tr className="group">
+      <td className="py-3 px-2">
+        <input 
+          type="text" 
+          value={item.name}
+          onChange={(e) => onChange(item.id, 'name', e.target.value)}
+          className="w-full px-4 py-2.5 bg-transparent border border-transparent hover:bg-slate-50 hover:border-slate-200 focus:bg-white focus:border-orange-500 rounded-xl outline-none transition-colors font-medium text-slate-800"
+        />
+      </td>
+      <td className="py-3 px-2">
+        <input 
+          type="number" 
+          min="1"
+          value={item.qty}
+          onChange={(e) => onChange(item.id, 'qty', e.target.value)}
+          className="w-full px-2 py-2.5 bg-transparent border border-transparent hover:bg-slate-50 hover:border-slate-200 focus:bg-white focus:border-orange-500 rounded-xl outline-none transition-colors font-medium text-center text-slate-800"
+        />
+      </td>
+      <td className="py-3 px-2 relative">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium pointer-events-none">₹</span>
+        <input 
+          type="number" 
+          min="0"
+          value={item.price}
+          onChange={(e) => onChange(item.id, 'price', e.target.value)}
+          className="w-full pl-8 pr-2 py-2.5 bg-transparent border border-transparent hover:bg-slate-50 hover:border-slate-200 focus:bg-white focus:border-orange-500 rounded-xl outline-none transition-colors font-medium text-right text-slate-800"
+        />
+      </td>
+      <td className="py-3 px-2 text-right">
+        <div className="py-2.5 px-4 font-bold text-slate-800 bg-slate-50/50 rounded-xl border border-slate-100">
+          ₹{((Number(item.qty) || 0) * (Number(item.price) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        </div>
+      </td>
+      <td className="py-3 pl-2 text-right">
+        <button 
+          onClick={() => onRemove(item.id)}
+          className="p-2.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          disabled={totalItems === 1}
+        >
+          <Trash2 className="w-5 h-5" />
+        </button>
+      </td>
+    </tr>
+  );
+});
 
 export default function CreatePurchase() {
   const navigate = useNavigate();
@@ -24,28 +72,26 @@ export default function CreatePurchase() {
   const [discount, setDiscount] = useState(0);
   const [taxPercent, setTaxPercent] = useState(0);
 
-  const handleItemChange = (id, field, value) => {
-    setItems(items.map(item => {
+  const handleItemChange = useCallback((id, field, value) => {
+    setItems(prevItems => prevItems.map(item => {
       if (item.id === id) {
-        return { ...item, [field]: field === 'qty' || field === 'price' ? Number(value) : value };
+        return { ...item, [field]: field === 'qty' || field === 'price' ? (value === '' ? '' : Number(value)) : value };
       }
       return item;
     }));
-  };
+  }, []);
 
-  const addItem = () => {
-    setItems([...items, { id: Date.now(), name: '', qty: 1, price: 0 }]);
-  };
+  const addItem = useCallback(() => {
+    setItems(prev => [...prev, { id: Date.now(), name: '', qty: 1, price: 0 }]);
+  }, []);
 
-  const removeItem = (id) => {
-    if (items.length > 1) {
-      setItems(items.filter(item => item.id !== id));
-    }
-  };
+  const removeItem = useCallback((id) => {
+    setItems(prev => prev.length > 1 ? prev.filter(item => item.id !== id) : prev);
+  }, []);
 
-  const subtotal = items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-  const taxAmount = (subtotal - discount) * (taxPercent / 100);
-  const total = subtotal - discount + taxAmount;
+  const subtotal = useMemo(() => items.reduce((sum, item) => sum + ((Number(item.qty) || 0) * (Number(item.price) || 0)), 0), [items]);
+  const taxAmount = useMemo(() => (subtotal - discount) * (taxPercent / 100), [subtotal, discount, taxPercent]);
+  const total = useMemo(() => subtotal - discount + taxAmount, [subtotal, discount, taxAmount]);
 
   const handleSubmit = (status) => {
     // Basic validation
@@ -197,50 +243,15 @@ export default function CreatePurchase() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items.map((item) => (
-                  <tr key={item.id} className="group">
-                    <td className="py-3 px-2">
-                      <input 
-                        type="text" 
-                        value={item.name}
-                        onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-transparent border border-transparent hover:bg-slate-50 hover:border-slate-200 focus:bg-white focus:border-orange-500 rounded-xl outline-none transition-all font-medium text-slate-800"
-                      />
-                    </td>
-                    <td className="py-3 px-2">
-                      <input 
-                        type="number" 
-                        min="1"
-                        value={item.qty}
-                        onChange={(e) => handleItemChange(item.id, 'qty', e.target.value)}
-                        className="w-full px-2 py-2.5 bg-transparent border border-transparent hover:bg-slate-50 hover:border-slate-200 focus:bg-white focus:border-orange-500 rounded-xl outline-none transition-all font-medium text-center text-slate-800"
-                      />
-                    </td>
-                    <td className="py-3 px-2 relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium pointer-events-none">₹</span>
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={item.price}
-                        onChange={(e) => handleItemChange(item.id, 'price', e.target.value)}
-                        className="w-full pl-8 pr-2 py-2.5 bg-transparent border border-transparent hover:bg-slate-50 hover:border-slate-200 focus:bg-white focus:border-orange-500 rounded-xl outline-none transition-all font-medium text-right text-slate-800"
-                      />
-                    </td>
-                    <td className="py-3 px-2 text-right">
-                      <div className="py-2.5 px-4 font-bold text-slate-800 bg-slate-50/50 rounded-xl border border-slate-100">
-                        ₹{(item.qty * item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </div>
-                    </td>
-                    <td className="py-3 pl-2 text-right">
-                      <button 
-                        onClick={() => removeItem(item.id)}
-                        className="p-2.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        disabled={items.length === 1}
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
+                {items.map((item, index) => (
+                  <PurchaseItemRow
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    totalItems={items.length}
+                    onChange={handleItemChange}
+                    onRemove={removeItem}
+                  />
                 ))}
               </tbody>
             </table>
