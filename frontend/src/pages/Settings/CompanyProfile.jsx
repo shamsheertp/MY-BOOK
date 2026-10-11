@@ -1,12 +1,13 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useDeferredValue } from 'react';
 import {
   Building2, Mail, Phone, Globe, MapPin, FileText, Landmark, Receipt,
-  Upload, Trash2, Save, RotateCcw, CheckCircle2, ImageIcon
+  Upload, Trash2, Save, RotateCcw, CheckCircle2, ImageIcon, Loader2
 } from 'lucide-react';
 import {
-  getCompanyProfile, saveCompanyProfile, resetCompanyProfile,
+  getCompanyProfile, saveCompanyProfileAsync, resetCompanyProfile,
   defaultCompanyProfile, formatAddressLines
 } from '../../hooks/useCompanyProfile';
+import { companyService } from '../../services/api';
 
 function Section({ icon: Icon, title, description, children }) {
   return (
@@ -26,7 +27,7 @@ function Section({ icon: Icon, title, description, children }) {
 }
 
 function Field({ label, name, value, onChange, placeholder, full, type = 'text', textarea, icon: Icon, required, error }) {
-  const base = `w-full ${Icon ? 'pl-10' : 'pl-3'} pr-3 py-2.5 border rounded-xl bg-white/70 text-sm outline-none transition-all focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${error ? 'border-rose-300' : 'border-slate-200'}`;
+  const base = `w-full ${Icon ? 'pl-10' : 'pl-3'} pr-3 py-2.5 border rounded-xl bg-white/70 text-sm outline-none transition-colors focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${error ? 'border-rose-300' : 'border-slate-200'}`;
   return (
     <div className={full ? 'sm:col-span-2' : ''}>
       <label htmlFor={`cp-${name}`} className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
@@ -45,12 +46,29 @@ function Field({ label, name, value, onChange, placeholder, full, type = 'text',
   );
 }
 
+
 export default function CompanyProfile() {
   const [form, setForm] = useState(getCompanyProfile);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    companyService.getProfile()
+      .then((res) => {
+        if (isMounted && res?.data?.companyProfile) {
+          setForm(prev => ({ ...prev, ...res.data.companyProfile }));
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load company profile from DB:', err.message);
+      });
+    return () => { isMounted = false; };
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -79,7 +97,7 @@ export default function CompanyProfile() {
 
   const validate = () => {
     const er = {};
-    if (!form.companyName.trim()) er.companyName = 'Company name is required';
+    if (!form.companyName?.trim()) er.companyName = 'Company name is required';
     if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) er.email = 'Enter a valid email';
     if (form.gstin && !/^[0-9A-Z]{15}$/i.test(form.gstin)) er.gstin = 'GSTIN must be 15 characters';
     if (form.pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/i.test(form.pan)) er.pan = 'Invalid PAN format';
@@ -88,12 +106,23 @@ export default function CompanyProfile() {
     return Object.keys(er).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    saveCompanyProfile(form);
-    setSaved(true);
-    setIsDirty(false);
-    setTimeout(() => setSaved(false), 2500);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await saveCompanyProfileAsync(form);
+      if (updated) {
+        setForm(prev => ({ ...prev, ...updated }));
+      }
+      setSaved(true);
+      setIsDirty(false);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save changes to database');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleReset = () => {
@@ -104,7 +133,8 @@ export default function CompanyProfile() {
     setIsDirty(false);
   };
 
-  const addressLines = formatAddressLines(form);
+  const deferredForm = useDeferredValue(form);
+  const addressLines = formatAddressLines(deferredForm);
 
   return (
     <div className="space-y-6 pb-12">
@@ -113,32 +143,47 @@ export default function CompanyProfile() {
         <div>
           <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">Settings</p>
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">Company Profile</h1>
-          <p className="text-sm text-slate-500 mt-1">These details appear on your invoices and payment receipts</p>
+          <p className="text-sm text-slate-500 mt-1">Saved to database and appears across your invoices & receipts</p>
         </div>
         <div className="flex items-center gap-3">
           <button
             id="cp-reset-btn"
             onClick={handleReset}
-            className="flex items-center text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2.5 rounded-xl transition-all shadow-sm"
+            disabled={saving}
+            className="flex items-center text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2.5 rounded-xl transition-all shadow-sm disabled:opacity-50"
           >
             <RotateCcw className="w-4 h-4 mr-2" /> Reset
           </button>
           <button
             id="cp-save-btn"
             onClick={handleSave}
-            className={`flex items-center text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all shadow-sm ${saved ? 'bg-emerald-600 shadow-emerald-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
+            disabled={saving}
+            className={`flex items-center text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all shadow-sm disabled:opacity-75 ${saved ? 'bg-emerald-600 shadow-emerald-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
           >
-            {saved ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            {saved ? 'Saved' : 'Save Changes'}
+            {saving ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : saved ? (
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
+            {saving ? 'Saving to DB...' : saved ? 'Saved to DB' : 'Save Changes'}
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">
+          {saveError}
+        </div>
+      )}
 
       {isDirty && (
         <div className="px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm">
           You have unsaved changes.
         </div>
       )}
+
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Form */}
@@ -219,35 +264,35 @@ export default function CompanyProfile() {
             <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
               <div className="p-6 bg-slate-50/60 border-b border-slate-100">
                 <div className="flex items-center gap-3 mb-3">
-                  {form.logo ? (
-                    <img src={form.logo} alt="" className="w-10 h-10 object-contain rounded-lg" />
+                  {deferredForm.logo ? (
+                    <img src={deferredForm.logo} alt="" className="w-10 h-10 object-contain rounded-lg" />
                   ) : (
                     <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                      <span className="text-white font-bold text-lg">{(form.companyName || 'C')[0].toUpperCase()}</span>
+                      <span className="text-white font-bold text-lg">{(deferredForm.companyName || 'C')[0].toUpperCase()}</span>
                     </div>
                   )}
                   <div className="min-w-0">
-                    <p className="text-lg font-bold text-slate-900 truncate">{form.companyName || 'Company Name'}</p>
-                    {form.tagline && <p className="text-[11px] text-slate-500 truncate">{form.tagline}</p>}
+                    <p className="text-lg font-bold text-slate-900 truncate">{deferredForm.companyName || 'Company Name'}</p>
+                    {deferredForm.tagline && <p className="text-[11px] text-slate-500 truncate">{deferredForm.tagline}</p>}
                   </div>
                 </div>
                 <div className="text-xs text-slate-500 space-y-0.5">
                   {addressLines.map((l, i) => <p key={i}>{l}</p>)}
-                  {form.gstin && <p className="font-semibold text-slate-600 pt-1">GSTIN: {form.gstin.toUpperCase()}</p>}
-                  {form.email && <p>{form.email}</p>}
-                  {form.phone && <p>{form.phone}</p>}
+                  {deferredForm.gstin && <p className="font-semibold text-slate-600 pt-1">GSTIN: {deferredForm.gstin.toUpperCase()}</p>}
+                  {deferredForm.email && <p>{deferredForm.email}</p>}
+                  {deferredForm.phone && <p>{deferredForm.phone}</p>}
                 </div>
               </div>
-              {form.showBankOnInvoice && form.bankName && (
+              {deferredForm.showBankOnInvoice && deferredForm.bankName && (
                 <div className="p-6 border-b border-slate-100 text-xs text-slate-600 space-y-0.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Bank Details</p>
-                  <p><span className="text-slate-400">Bank:</span> {form.bankName}</p>
-                  <p><span className="text-slate-400">A/C:</span> {form.accountNumber}</p>
-                  <p><span className="text-slate-400">IFSC:</span> {form.ifsc?.toUpperCase()}</p>
-                  {form.upiId && <p><span className="text-slate-400">UPI:</span> {form.upiId}</p>}
+                  <p><span className="text-slate-400">Bank:</span> {deferredForm.bankName}</p>
+                  <p><span className="text-slate-400">A/C:</span> {deferredForm.accountNumber}</p>
+                  <p><span className="text-slate-400">IFSC:</span> {deferredForm.ifsc?.toUpperCase()}</p>
+                  {deferredForm.upiId && <p><span className="text-slate-400">UPI:</span> {deferredForm.upiId}</p>}
                 </div>
               )}
-              <div className="p-6 text-center text-xs text-slate-500 italic">{form.footerNote}</div>
+              <div className="p-6 text-center text-xs text-slate-500 italic">{deferredForm.footerNote}</div>
             </div>
           </div>
         </div>

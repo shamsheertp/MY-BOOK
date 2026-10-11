@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Users, ShoppingCart, Receipt, X, CornerDownLeft } from 'lucide-react';
 import contactsData from '../../db/contacts.json';
@@ -38,7 +38,9 @@ export function GlobalSearch() {
   const wrapperRef = useRef(null);
   const inputRef = useRef(null);
 
-  const q = query.trim().toLowerCase();
+  const deferredQuery = useDeferredValue(query);
+  const q = deferredQuery.trim().toLowerCase();
+
 
   const groups = useMemo(() => {
     if (!q) return [];
@@ -157,7 +159,7 @@ export function GlobalSearch() {
         onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
         onFocus={() => setIsOpen(true)}
         onKeyDown={handleKeyDown}
-        className="block w-full py-2 pl-10 pr-16 text-sm border border-slate-200/60 rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white/80 transition-all outline-none shadow-sm"
+        className="block w-full py-2 pl-10 pr-16 text-sm border border-slate-200/60 rounded-xl bg-white/70 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-colors outline-none shadow-sm"
         placeholder="Search contacts, phone, sales, purchases..."
         autoComplete="off"
       />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import profileData from '../db/profile.json';
+import { companyService } from '../services/api';
 
 const STORAGE_KEY = 'mybook_company_profile';
 const EVENT_NAME = 'company-profile-updated';
@@ -21,30 +22,68 @@ export const saveCompanyProfile = (profile) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
   window.dispatchEvent(new Event(EVENT_NAME));
+
+  // Sync to PostgreSQL DB in background
+  companyService.updateProfile(profile).catch((err) => {
+    console.warn('Could not sync company profile to backend DB:', err.message);
+  });
+};
+
+export const saveCompanyProfileAsync = async (profile) => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    window.dispatchEvent(new Event(EVENT_NAME));
+  }
+
+  // Persist directly to DB
+  const res = await companyService.updateProfile(profile);
+  if (res?.data?.companyProfile) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data.companyProfile));
+    window.dispatchEvent(new Event(EVENT_NAME));
+    return res.data.companyProfile;
+  }
+  return profile;
 };
 
 export const resetCompanyProfile = () => {
   if (typeof window === 'undefined' || !window.localStorage) return;
   localStorage.removeItem(STORAGE_KEY);
   window.dispatchEvent(new Event(EVENT_NAME));
+  companyService.updateProfile(defaultCompanyProfile).catch(() => {});
 };
 
 /** Formats the multi-part address into display lines */
 export const formatAddressLines = (p) => {
+  if (!p) return [];
   const cityLine = [p.city, p.state].filter(Boolean).join(', ') + (p.pincode ? ` - ${p.pincode}` : '');
   return [p.addressLine1, p.addressLine2, cityLine.trim(), p.country].filter(Boolean);
 };
 
-/** React hook — stays in sync whenever the profile is saved anywhere */
+/** React hook — stays in sync with DB and localStorage */
 export function useCompanyProfile() {
   const [profile, setProfile] = useState(getCompanyProfile);
 
   const refresh = useCallback(() => setProfile(getCompanyProfile()), []);
 
   useEffect(() => {
+    // Initial fetch from backend PostgreSQL DB
+    let isMounted = true;
+    companyService.getProfile()
+      .then((res) => {
+        if (isMounted && res?.data?.companyProfile) {
+          const dbProfile = { ...defaultCompanyProfile, ...res.data.companyProfile };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(dbProfile));
+          setProfile(dbProfile);
+        }
+      })
+      .catch(() => {
+        // Fallback to local cache silently
+      });
+
     window.addEventListener(EVENT_NAME, refresh);
     window.addEventListener('storage', refresh);
     return () => {
+      isMounted = false;
       window.removeEventListener(EVENT_NAME, refresh);
       window.removeEventListener('storage', refresh);
     };
@@ -52,3 +91,4 @@ export function useCompanyProfile() {
 
   return profile;
 }
+

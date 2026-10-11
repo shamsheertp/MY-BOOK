@@ -1,5 +1,8 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout/Layout';
+import Login from './pages/Auth/Login';
+import UserManagement from './pages/Users/UserManagement';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Contacts from './pages/Contacts/Contacts';
 import ContactProfile from './pages/Contacts/ContactProfile';
@@ -28,45 +31,60 @@ import ProductDetails from './pages/Products/ProductDetails';
 import Reports from './pages/Reports/Reports';
 import WhatsAppSettings from './pages/Settings/Connect/WhatsApp/WhatsAppSettings';
 
+function AppLayout() {
+  return (
+    <Layout>
+      <Outlet />
+    </Layout>
+  );
+}
 
 function App() {
   return (
-    <BrowserRouter>
-      <Layout>
+    <AuthProvider>
+      <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/contacts" element={<Contacts />} />
-          <Route path="/contacts/:id" element={<ContactProfile />} />
-          <Route path="/sales" element={<Sales />} />
-          <Route path="/sales/new" element={<CreateInvoice />} />
-          <Route path="/sales/:id" element={<SaleDetails />} />
-          <Route path="/purchases" element={<Purchases />} />
-          <Route path="/purchases/new" element={<CreatePurchase />} />
-          <Route path="/purchases/receipts/new" element={<CreateGRN />} />
-          <Route path="/purchases/receipts/:id" element={<GRNDetails />} />
-          <Route path="/purchases/bills/new" element={<CreatePurchaseBill />} />
-          <Route path="/purchases/bills/:id" element={<PurchaseBillDetails />} />
-          <Route path="/purchases/payments/new" element={<CreatePurchasePayment />} />
-          <Route path="/purchases/payments/:id" element={<PurchasePaymentDetails />} />
-          <Route path="/purchases/:id" element={<PurchaseDetails />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/expenses/new" element={<CreateExpense />} />
-          <Route path="/expenses/:id" element={<ExpenseDetails />} />
-          <Route path="/journal" element={<Journals />} />
-          <Route path="/journal/:id" element={<JournalDetails />} />
-          <Route path="/ledger" element={<Ledgers />} />
-          <Route path="/ledgers/:id" element={<LedgerDetails />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/products/:id" element={<ProductDetails />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<CompanyProfile />} />
-          <Route path="/settings/company" element={<CompanyProfile />} />
-          <Route path="/settings/connect/whatsapp" element={<WhatsAppSettings />} />
-          <Route path="*" element={<div className="text-center py-20"><h2 className="text-2xl font-bold text-slate-800">Under Construction</h2><p className="text-slate-500 mt-2">This page is part of the specs and will be built soon.</p></div>} />
+          {/* Public Authentication Route */}
+          <Route path="/login" element={<Login />} />
+
+          {/* App Routes with Layout */}
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/users" element={<UserManagement />} />
+            <Route path="/contacts" element={<Contacts />} />
+            <Route path="/contacts/:id" element={<ContactProfile />} />
+            <Route path="/sales" element={<Sales />} />
+            <Route path="/sales/new" element={<CreateInvoice />} />
+            <Route path="/sales/:id" element={<SaleDetails />} />
+            <Route path="/purchases" element={<Purchases />} />
+            <Route path="/purchases/new" element={<CreatePurchase />} />
+            <Route path="/purchases/receipts/new" element={<CreateGRN />} />
+            <Route path="/purchases/receipts/:id" element={<GRNDetails />} />
+            <Route path="/purchases/bills/new" element={<CreatePurchaseBill />} />
+            <Route path="/purchases/bills/:id" element={<PurchaseBillDetails />} />
+            <Route path="/purchases/payments/new" element={<CreatePurchasePayment />} />
+            <Route path="/purchases/payments/:id" element={<PurchasePaymentDetails />} />
+            <Route path="/purchases/:id" element={<PurchaseDetails />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/expenses/new" element={<CreateExpense />} />
+            <Route path="/expenses/:id" element={<ExpenseDetails />} />
+            <Route path="/journal" element={<Journals />} />
+            <Route path="/journal/:id" element={<JournalDetails />} />
+            <Route path="/ledger" element={<Ledgers />} />
+            <Route path="/ledgers/:id" element={<LedgerDetails />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/products/:id" element={<ProductDetails />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<CompanyProfile />} />
+            <Route path="/settings/company" element={<CompanyProfile />} />
+            <Route path="/settings/users" element={<UserManagement />} />
+            <Route path="/settings/connect/whatsapp" element={<WhatsAppSettings />} />
+            <Route path="*" element={<div className="text-center py-20"><h2 className="text-2xl font-bold text-slate-800">Under Construction</h2><p className="text-slate-500 mt-2">This page is part of the specs and will be built soon.</p></div>} />
+          </Route>
         </Routes>
-      </Layout>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }
 
 export default App;
