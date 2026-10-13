@@ -1,29 +1,40 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../../Dashboard/components/StatusBadge';
-import contactsData from '../../../db/contacts.json';
 
-export function PurchasesTable({ purchases, currentPage, itemsPerPage, onPageChange, getSupplierName }) {
+export function PurchasesTable({
+  purchases = [],
+  currentPage = 1,
+  itemsPerPage = 10,
+  totalPages: propTotalPages,
+  totalItems: propTotalItems,
+  onPageChange,
+  getSupplierName,
+  contacts = [],
+}) {
   const navigate = useNavigate();
   
-  const totalPages = Math.ceil(purchases.length / itemsPerPage);
-  const paginatedPurchases = purchases.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const totalPages = propTotalPages !== undefined ? propTotalPages : Math.ceil(purchases.length / itemsPerPage);
+  const totalRecords = propTotalItems !== undefined ? propTotalItems : purchases.length;
+  
+  // If backend already paginated, purchases will be the page slice; otherwise slice locally
+  const displayPurchases = purchases.length > itemsPerPage
+    ? purchases.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : purchases;
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 2
-    }).format(amount);
+    }).format(amount || 0);
   };
 
-  const getCompany = (supplierId) => {
-    if (!supplierId) return '';
-    const digit = supplierId.split('-')[1];
-    const c = contactsData.find(c => c.id === `CONT-${digit}`);
+  const getCompany = (purchase) => {
+    if (purchase.supplierCompany) return purchase.supplierCompany;
+    if (purchase.supplier?.companyName) return purchase.supplier.companyName;
+    if (!purchase.supplierId) return '';
+    const c = contacts.find(c => c.id === purchase.supplierId || String(c.id).includes(String(purchase.supplierId)));
     return c?.companyName || '';
   };
 
@@ -42,53 +53,18 @@ export function PurchasesTable({ purchases, currentPage, itemsPerPage, onPageCha
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
-            {paginatedPurchases.length > 0 ? (
-              paginatedPurchases.map((purchase) => {
-                const company = getCompany(purchase.supplierId);
-                const supplierName = getSupplierName(purchase.supplierId);
-                const items = purchase.items || [];
-                const subtotal = items.reduce((acc, item) => {
-                  const activeQuantity = item.ordered - (item.canceled || 0);
-                  return acc + (activeQuantity * item.price);
-                }, 0);
-                const dynamicAmount = subtotal * 1.05; // including 5% tax
-
-                const payments = purchase.payments || [];
-                const totalPaid = payments.length > 0
-                  ? payments.filter(p => p.status !== 'Voided').reduce((acc, p) => acc + p.amount, 0)
-                  : (purchase.paid || 0);
-                const dynamicBalance = Math.max(0, dynamicAmount - totalPaid);
-
-                let dynamicStatus = purchase.status || 'DRAFT';
-                if (dynamicStatus !== 'DRAFT') {
-                  const allReceived = items.length > 0 && items.every(i => i.received >= (i.ordered - (i.canceled || 0)));
-                  const someReceived = items.some(i => i.received > 0);
-                  
-                  const bills = purchase.bills || [];
-                  const validBills = bills.filter(b => b.status !== 'Voided');
-                  const allBillsPaid = validBills.length > 0 && validBills.every(b => b.status === 'Paid');
-                  const expectedBillTotal = items.reduce((acc, i) => {
-                    const activeQuantity = i.ordered - (i.canceled || 0);
-                    return acc + (activeQuantity * i.price);
-                  }, 0) * 1.05;
-                  const actualBilledTotal = validBills.reduce((acc, b) => acc + b.amount, 0);
-                  const isFullyBilled = Math.abs(expectedBillTotal - actualBilledTotal) < 1;
-
-                  if (allReceived && isFullyBilled && allBillsPaid) {
-                    dynamicStatus = 'COMPLETED';
-                  } else if (allReceived) {
-                    dynamicStatus = 'PENDING PAYMENT';
-                  } else if (someReceived) {
-                    dynamicStatus = 'PARTIALLY RECEIVED';
-                  } else {
-                    dynamicStatus = 'ORDERED';
-                  }
-                }
+            {displayPurchases.length > 0 ? (
+              displayPurchases.map((purchase) => {
+                const company = getCompany(purchase);
+                const supplierName = purchase.supplierName || (getSupplierName ? getSupplierName(purchase.supplierId, purchase.supplierName) : (purchase.supplier?.contactName || 'Supplier'));
+                const displayAmount = purchase.total ?? purchase.amount ?? 0;
+                const displayBalance = purchase.balance ?? 0;
+                const displayStatus = purchase.status || 'ORDERED';
 
                 return (
                 <tr 
-                  key={purchase.id} 
-                  onClick={() => navigate(`/purchases/${purchase.ref}`)}
+                  key={purchase.id || purchase.ref} 
+                  onClick={() => navigate(`/purchases/${purchase.ref || purchase.id}`)}
                   className="hover:bg-white/80 transition-colors cursor-pointer group border-b border-slate-50 last:border-0"
                 >
                   <td className="px-6 py-4 font-bold text-orange-600">{purchase.ref}</td>
@@ -97,10 +73,10 @@ export function PurchasesTable({ purchases, currentPage, itemsPerPage, onPageCha
                     {company && <div className="text-xs text-slate-500 mt-0.5">{company}</div>}
                   </td>
                   <td className="px-6 py-4 text-slate-500 font-medium">{purchase.date}</td>
-                  <td className="px-6 py-4 font-bold text-slate-800 text-right">{formatCurrency(dynamicAmount)}</td>
-                  <td className="px-6 py-4 font-bold text-rose-600 text-right">{dynamicBalance > 0 ? formatCurrency(dynamicBalance) : ''}</td>
+                  <td className="px-6 py-4 font-bold text-slate-800 text-right">{formatCurrency(displayAmount)}</td>
+                  <td className="px-6 py-4 font-bold text-rose-600 text-right">{displayBalance > 0 ? formatCurrency(displayBalance) : '-'}</td>
                   <td className="px-6 py-4 text-center">
-                    <StatusBadge status={dynamicStatus} />
+                    <StatusBadge status={displayStatus} />
                   </td>
                 </tr>
                 );
@@ -117,7 +93,7 @@ export function PurchasesTable({ purchases, currentPage, itemsPerPage, onPageCha
       </div>
       
       <div className="p-4 border-t border-slate-100 bg-white/60 flex items-center justify-between text-sm text-slate-500">
-        <span>Showing {paginatedPurchases.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, purchases.length)} of {purchases.length} records</span>
+        <span>Showing {displayPurchases.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, totalRecords)} of {totalRecords} records</span>
         
         <div className="flex items-center space-x-2">
           <button 

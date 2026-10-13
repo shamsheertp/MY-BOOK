@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import profileData from '../db/profile.json';
-import { companyService } from '../services/api';
+import { companyService, tokenStorage } from '../services/api';
 
 const STORAGE_KEY = 'mybook_company_profile';
 const EVENT_NAME = 'company-profile-updated';
@@ -72,6 +72,10 @@ export function useCompanyProfile() {
   useEffect(() => {
     // Initial fetch from backend PostgreSQL DB
     let isMounted = true;
+    if (typeof tokenStorage?.getAccessToken === 'function' && !tokenStorage.getAccessToken()) {
+      return;
+    }
+
     companyService.getProfile()
       .then((res) => {
         if (isMounted && res?.data?.companyProfile) {

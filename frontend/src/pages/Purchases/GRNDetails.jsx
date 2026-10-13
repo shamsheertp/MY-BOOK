@@ -1,7 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, PackageCheck, CheckCircle2 } from 'lucide-react';
 import purchasesData from '../../db/purchases.json';
-import contactsData from '../../db/contacts.json';
 import { useCompanyProfile } from '../../hooks/useCompanyProfile';
 
 export default function GRNDetails() {
@@ -9,16 +8,17 @@ export default function GRNDetails() {
   const navigate = useNavigate();
   const company = useCompanyProfile();
 
-  // Mock parsing PO ref from GRN id (e.g. GRN-001-01 -> PO-2026-001)
-  const poSuffix = id.split('-')[1];
-  const poRef = `PO-2026-${poSuffix}`;
-  const purchase = purchasesData.find(p => p.ref === poRef) || purchasesData[0];
+  // Safely find purchase
+  const poSuffix = id.includes('-') ? id.split('-')[1] : id;
+  const purchase = purchasesData.find(p => p.ref === `PO-2026-${poSuffix}` || p.receipts?.some(r => r.id === id || r.ref === id)) || purchasesData[0] || {};
   
-  const supplierId = purchase.supplierId;
-  const supplier = contactsData.find(c => c.id === `CONT-${supplierId.split('-')[1]}`) || contactsData[0];
+  const supplier = purchase.supplier || {
+    contactName: purchase.supplierName || 'Supplier',
+    companyName: purchase.supplierCompany || '',
+  };
 
   // We only show items that have been received
-  const receivedItems = (purchase.items || []).filter(i => i.received > 0);
+  const receivedItems = (purchase.items || []).filter(i => (Number(i.receivedKg ?? i.received) > 0));
 
   const handlePrint = () => {
     window.print();

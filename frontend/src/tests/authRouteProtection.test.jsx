@@ -47,4 +47,26 @@ describe('Authentication Route Protection & Token Management', () => {
     const element = await screen.findByText('Redirected to Login');
     expect(element).toBeDefined();
   });
+
+  it('resets authentication when auth:session-expired event is dispatched', async () => {
+    tokenStorage.setAccessToken('dummy-token');
+    localStorage.setItem('mybook_user_cache', JSON.stringify({ id: 'u1', name: 'Test' }));
+
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<TestProtectedComponent />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    );
+
+    // Dispatch global session expired event
+    window.dispatchEvent(new CustomEvent('auth:session-expired'));
+
+    const element = await screen.findByText('Redirected to Login');
+    expect(element).toBeDefined();
+    expect(tokenStorage.getAccessToken()).toBeNull();
+  });
 });

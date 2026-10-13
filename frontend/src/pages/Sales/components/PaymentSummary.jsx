@@ -6,7 +6,7 @@ export function PaymentSummary({ sale, paymentsList, balance, received, total, f
     <div className="glass-card bg-white/95 rounded-xl shadow-md overflow-hidden border border-white print:hidden mb-6">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Payment Summary</h3>
-          <StatusBadge status={balance <= 0 ? 'PAID' : received > 0 ? 'PARTIAL' : sale.status} />
+          <StatusBadge status={sale?.status === 'VOID' ? 'VOID' : balance <= 0 ? 'PAID' : received > 0 ? 'PARTIAL' : sale?.status} />
         </div>
         
         <div className="p-6 flex flex-col gap-6">
@@ -23,7 +23,7 @@ export function PaymentSummary({ sale, paymentsList, balance, received, total, f
                   </tr>
                 </thead>
                 <tbody className="text-slate-700">
-                  {paymentsList.map((pay, idx) => (
+                  {(Array.isArray(paymentsList) ? paymentsList : []).map((pay, idx) => (
                     <tr key={idx} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors ${pay.voided ? 'opacity-60' : ''}`}>
                       <td className="py-2 pr-4 font-medium">{pay.date}</td>
                       <td className="py-2 px-4 text-slate-500">

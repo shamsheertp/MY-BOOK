@@ -1,42 +1,69 @@
-import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Save, Package } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, CheckCircle2, Package } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { purchasesService } from '../../services/api';
 import purchasesData from '../../db/purchases.json';
-import contactsData from '../../db/contacts.json';
 
 export default function CreateGRN() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const poRef = searchParams.get('po');
 
-  let purchase = purchasesData.find(p => p.ref === poRef) || purchasesData[0];
-  const savedPurchase = localStorage.getItem(`mock_purchase_${purchase.ref}`);
-  if (savedPurchase) {
-    try {
-      purchase = JSON.parse(savedPurchase);
-    } catch (e) {
-      console.error(e);
-    }
-  }
-  
-  const getCompany = (supplierId) => {
-    if (!supplierId) return null;
-    const digit = supplierId.split('-')[1];
-    return contactsData.find(c => c.id === `CONT-${digit}`);
-  };
-  const supplier = getCompany(purchase.supplierId) || contactsData[0];
+  const [purchase, setPurchase] = useState(() => {
+    return purchasesData.find(p => p.ref === poRef) || purchasesData[0] || {};
+  });
+  const [items, setItems] = useState([]);
+  const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const [items, setItems] = useState(() => 
-    (purchase.items || []).map(item => ({
-      ...item,
-      currentReceive: 0 // Default to 0, user decides
-    }))
-  );
+  useEffect(() => {
+    if (!poRef) return;
+    let isMounted = true;
+    purchasesService.getById(poRef)
+      .then((res) => {
+        if (isMounted && res?.data) {
+          const p = res.data;
+          setPurchase(p);
+          const mappedItems = (p.items || []).map((item) => {
+            const ordered = Number(item.orderedKg ?? item.ordered ?? 0);
+            const received = Number(item.receivedKg ?? item.received ?? 0);
+            const remaining = Math.max(0, ordered - received);
+            return {
+              ...item,
+              ordered,
+              received,
+              currentReceive: remaining, // default suggest full remaining
+            };
+          });
+          setItems(mappedItems);
+        }
+      })
+      .catch((err) => {
+        console.warn('Falling back to local cache for PO:', err);
+        const p = purchasesData.find(item => item.ref === poRef) || purchasesData[0];
+        setPurchase(p);
+        setItems((p.items || []).map(i => ({
+          ...i,
+          ordered: Number(i.ordered || 0),
+          received: Number(i.received || 0),
+          currentReceive: Math.max(0, Number(i.ordered || 0) - Number(i.received || 0)),
+        })));
+      });
+
+    return () => { isMounted = false; };
+  }, [poRef]);
+
+  const supplier = purchase.supplier || {
+    contactName: purchase.supplierName || 'Supplier',
+    companyName: purchase.supplierCompany || '',
+  };
 
   const handleReceiveChange = (id, val) => {
     let num = Number(val) || 0;
     const item = items.find(i => i.id === id);
-    const remaining = item.ordered - item.received;
+    if (!item) return;
+    const remaining = Math.max(0, item.ordered - item.received);
     
     if (num > remaining) num = remaining;
     if (num < 0) num = 0;
@@ -44,95 +71,75 @@ export default function CreateGRN() {
     setItems(items.map(i => i.id === id ? { ...i, currentReceive: num } : i));
   };
 
-  const handleConfirm = () => {
-    // In-memory mutation for the prototype
-    let receivedAnything = false;
-    
-    items.forEach(item => {
-      if (item.currentReceive > 0) {
-        receivedAnything = true;
-      }
-    });
+  const handleConfirm = async () => {
+    setErrorMsg('');
+    const toReceive = items.filter(i => (Number(i.currentReceive) || 0) > 0);
 
-    if (!receivedAnything) {
-      alert("Please enter a receiving quantity greater than 0 for at least one item.");
+    if (toReceive.length === 0) {
+      setErrorMsg("Please enter a receiving quantity greater than 0 for at least one item.");
       return;
     }
 
-    let totalReceivedNow = 0;
-    
-    items.forEach(item => {
-      if (item.currentReceive > 0) {
-        const poItem = purchase.items.find(i => i.id === item.id);
-        if (poItem) {
-          poItem.received += item.currentReceive;
-          totalReceivedNow += item.currentReceive;
-        }
-      }
-    });
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        notes,
+        items: toReceive.map(i => ({
+          id: i.id,
+          name: i.name,
+          currentReceiveKg: Number(i.currentReceive),
+        })),
+      };
 
-    if (totalReceivedNow > 0) {
-      if (!purchase.receipts) purchase.receipts = [];
-      
-      // If there's already mock received data but no receipts array, initialize it first
-      if (purchase.receipts.length === 0 && purchase.items.some(i => i.received > 0) && purchase.items.some(i => i.received - (items.find(it => it.id === i.id)?.currentReceive || 0) > 0)) {
-        const pastReceived = purchase.items.reduce((acc, i) => acc + (i.received - (items.find(it => it.id === i.id)?.currentReceive || 0)), 0);
-        purchase.receipts.push({
-          id: `GRN-${purchase.ref.split('-').pop()}-01`,
-          date: purchase.date,
-          itemsReceived: pastReceived,
-          status: 'Completed'
-        });
+      const res = await purchasesService.createReceipt(purchase.id || purchase.ref, payload);
+      if (res?.success) {
+        navigate(`/purchases/${purchase.ref || purchase.id}`);
+      } else {
+        setErrorMsg(res?.message || 'Failed to record goods receipt');
       }
-
-      purchase.receipts.push({
-        id: `GRN-${purchase.ref.split('-').pop()}-${String(purchase.receipts.length + 1).padStart(2, '0')}`,
-        date: new Date().toISOString().split('T')[0],
-        itemsReceived: totalReceivedNow,
-        status: 'Completed'
-      });
+    } catch (err) {
+      console.error('Error creating goods receipt note:', err);
+      setErrorMsg(err?.response?.data?.message || err?.message || 'Failed to save Goods Receipt Note');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (receivedAnything) {
-      const allReceived = purchase.items.every(i => i.received >= i.ordered);
-      if (allReceived && purchase.status !== 'COMPLETED') {
-          purchase.status = 'PENDING PAYMENT';
-      } else if (purchase.status !== 'COMPLETED' && purchase.status !== 'PENDING PAYMENT') {
-          purchase.status = 'PARTIALLY RECEIVED';
-      }
-    }
-
-    localStorage.setItem(`mock_purchase_${purchase.ref}`, JSON.stringify(purchase));
-
-    navigate(`/purchases/${purchase.ref}`);
   };
 
   return (
     <div className="max-w-5xl mx-auto fade-in px-4 sm:px-0 pb-12">
+      {errorMsg && (
+        <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 font-semibold flex items-center justify-between">
+          <span>{errorMsg}</span>
+          <button onClick={() => setErrorMsg('')} className="text-red-500 hover:text-red-700 font-bold">&times;</button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center space-x-4">
           <button onClick={() => navigate(-1)} className="p-2.5 bg-white border border-slate-200 rounded-full hover:bg-slate-50 transition-colors shadow-sm text-slate-600 hover:text-orange-600">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Receive Goods</h1>
-            <p className="text-sm text-slate-500 mt-1 font-medium">Create a Goods Receipt Note (GRN) for {purchase.ref}</p>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Receive Goods (GRN)</h1>
+            <p className="text-sm text-slate-500 mt-1 font-medium">Create a Goods Receipt Note & update warehouse inventory for {purchase.ref}</p>
           </div>
         </div>
         
         <div className="flex items-center space-x-3">
           <button 
+            disabled={isSubmitting}
             onClick={() => navigate(-1)}
-            className="px-5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm transition-colors"
+            className="px-5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button 
+            disabled={isSubmitting}
             onClick={handleConfirm}
-            className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-sm shadow-orange-200 transition-colors flex items-center"
+            className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-sm shadow-orange-200 transition-colors flex items-center disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4 mr-2" />
-            Confirm Receipt
+            {isSubmitting ? 'Receiving...' : 'Confirm Receipt & Update Stock'}
           </button>
         </div>
       </div>
@@ -142,16 +149,22 @@ export default function CreateGRN() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Supplier Details</label>
-              <h3 className="font-bold text-slate-800 text-lg">{supplier.companyName || supplier.company}</h3>
-              <p className="text-sm text-slate-600">{supplier.contactName || supplier.name}</p>
+              <h3 className="font-bold text-slate-800 text-lg">{supplier.companyName || supplier.company || purchase.supplierCompany || purchase.supplierName}</h3>
+              <p className="text-sm text-slate-600">{supplier.contactName || supplier.name || purchase.supplierName}</p>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Delivery Note / Reference</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Delivery Note / Internal Remarks</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Package className="w-4 h-4 text-slate-400 group-focus-within:text-orange-500" />
                 </div>
-                <input type="text" placeholder="Enter supplier's delivery note number" className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all shadow-sm" />
+                <input 
+                  type="text" 
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Enter supplier's delivery note or warehouse notes" 
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all shadow-sm" 
+                />
               </div>
             </div>
           </div>
@@ -162,31 +175,32 @@ export default function CreateGRN() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b-2 border-slate-200">
-                  <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider">Product</th>
-                  <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider text-center">Ordered</th>
-                  <th className="pb-4 font-bold text-slate-400 uppercase tracking-wider text-center text-xs">Prev. Rec'd</th>
-                  <th className="pb-4 font-bold text-slate-400 uppercase tracking-wider text-center text-xs">Remaining</th>
-                  <th className="pb-4 font-bold text-orange-600 uppercase tracking-wider text-center w-32">Receiving Now</th>
+                  <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider">Product / Material</th>
+                  <th className="pb-4 font-bold text-slate-500 uppercase tracking-wider text-center">Ordered (Kg)</th>
+                  <th className="pb-4 font-bold text-slate-400 uppercase tracking-wider text-center text-xs">Prev. Rec'd (Kg)</th>
+                  <th className="pb-4 font-bold text-slate-400 uppercase tracking-wider text-center text-xs">Remaining (Kg)</th>
+                  <th className="pb-4 font-bold text-orange-600 uppercase tracking-wider text-center w-36">Receiving Now (Kg)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((item) => {
-                  const remaining = item.ordered - item.received;
+                  const remaining = Math.max(0, item.ordered - item.received);
                   return (
                   <tr key={item.id} className="group hover:bg-slate-50 transition-colors">
                     <td className="py-4 pr-4">
                       <div className="font-bold text-slate-800">{item.name}</div>
                     </td>
-                    <td className="py-4 px-2 text-center font-bold text-slate-800">{item.ordered}</td>
-                    <td className="py-4 px-2 text-center text-slate-400 font-medium">{item.received}</td>
+                    <td className="py-4 px-2 text-center font-bold text-slate-800">{item.ordered} kg</td>
+                    <td className="py-4 px-2 text-center text-slate-400 font-medium">{item.received} kg</td>
                     <td className="py-4 px-2 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${remaining === 0 ? 'bg-slate-100 text-slate-400' : 'bg-orange-50 text-orange-600'}`}>
-                        {remaining}
+                        {remaining} kg
                       </span>
                     </td>
                     <td className="py-4 pl-2 text-center">
                       <input 
                         type="number" 
+                        step="any"
                         min="0"
                         max={remaining}
                         value={item.currentReceive}

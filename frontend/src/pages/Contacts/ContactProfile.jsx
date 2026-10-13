@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Receipt, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ContactProfileHeader } from './components/ContactProfileHeader';
 import { ProfileStatCard } from './components/ProfileStatCard';
 import { StatusBadge } from '../Dashboard/components/StatusBadge';
-import contactsData from '../../db/contacts.json';
+import { CustomerModal } from './components/CustomerModal';
+import { contactsService } from '../../services/api';
 import salesData from '../../db/sales.json';
 import purchasesData from '../../db/purchases.json';
 
@@ -17,7 +18,31 @@ export default function ContactProfile() {
   const [filterType, setFilterType] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const recordsPerPage = 10;
+
+  const [contact, setContact] = useState(null);
+
+  const fetchContact = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    try {
+      const res = await contactsService.getById(id);
+      if (res?.data?.contact) {
+        setContact(res.data.contact);
+      } else if (res?.data) {
+        setContact(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load contact from DB:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchContact();
+  }, [fetchContact]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -27,10 +52,10 @@ export default function ContactProfile() {
     }).format(amount);
   };
 
-  const contact = contactsData.find(c => c.id === (id || 'CONT-001')) || contactsData[0];
-
   // Match sales based on previous mapping (CUST-00X matches CONT-00X digit)
-  const contactDigit = contact.id.split('-')[1];
+  const contactDigit = (contact?.code || contact?.id || 'CONT-001').includes('-')
+    ? (contact.code || contact.id).split('-')[1]
+    : '001';
   const customerId = `CUST-${contactDigit}`;
   const supplierId = `SUP-${contactDigit}`;
 
@@ -97,7 +122,7 @@ export default function ContactProfile() {
         <span className="font-medium text-sm">Back to Contacts</span>
       </div>
 
-      <ContactProfileHeader contact={contact} />
+      <ContactProfileHeader contact={contact} onEdit={() => setIsEditModalOpen(true)} />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -262,6 +287,13 @@ export default function ContactProfile() {
           </div>
         </div>
       </div>
+
+      <CustomerModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        contact={contact}
+        onSaved={fetchContact}
+      />
     </div>
   );
 }

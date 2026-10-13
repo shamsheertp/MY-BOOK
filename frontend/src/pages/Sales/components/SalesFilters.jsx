@@ -4,32 +4,36 @@ export function SalesFilters({ searchTerm, setSearchTerm, statusFilter, setStatu
   return (
     <div className="p-6 border-b border-slate-100 bg-white/50 flex flex-col sm:flex-row gap-4 justify-between items-center">
       <div className="relative max-w-md w-full group">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
           <Search className="w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
         </div>
         <input 
           type="text" 
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by invoice ref or customer..." 
-          className="w-full pl-10 pr-4 py-2.5 border border-slate-200/60 rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none text-sm"
+          placeholder="Search by invoice ref, customer, or company..." 
+          className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none text-sm text-slate-800 shadow-sm"
         />
       </div>
       
-      <div className="w-full sm:w-auto min-w-[150px]">
+      <div className="w-full sm:w-auto min-w-[170px]">
         <select 
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-full py-2.5 px-4 border border-slate-200/60 rounded-xl bg-white/50 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none text-sm font-medium text-slate-700 appearance-none"
+          className="w-full py-2.5 px-4 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none text-sm font-semibold text-slate-700 shadow-sm cursor-pointer appearance-none"
           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em' }}
         >
-          <option value="ALL">All Status</option>
-          <option value="DRAFT">Draft</option>
+          <option value="ALL">All Statuses</option>
           <option value="UNPAID">Unpaid</option>
-          <option value="PARTIAL">Partial</option>
+          <option value="PARTIAL">Partially Paid</option>
           <option value="PAID">Paid</option>
+          <option value="OVERDUE">Overdue</option>
+          <option value="DRAFT">Draft</option>
+          <option value="CANCELLED">Cancelled</option>
+          <option value="VOID">Void</option>
         </select>
       </div>
     </div>
   );
 }
+export default SalesFilters;

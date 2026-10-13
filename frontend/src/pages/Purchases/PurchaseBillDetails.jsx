@@ -1,7 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, FileText } from 'lucide-react';
 import purchasesData from '../../db/purchases.json';
-import contactsData from '../../db/contacts.json';
 import { useCompanyProfile } from '../../hooks/useCompanyProfile';
 
 export default function PurchaseBillDetails() {
@@ -34,7 +33,10 @@ export default function PurchaseBillDetails() {
     };
   }
 
-  const supplier = contactsData.find(c => c.id === `CONT-${purchase.supplierId.split('-')[1]}`) || contactsData[0];
+  const supplier = purchase?.supplier || {
+    contactName: purchase?.supplierName || 'Supplier',
+    companyName: purchase?.supplierCompany || '',
+  };
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);

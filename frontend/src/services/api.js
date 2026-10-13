@@ -36,7 +36,7 @@ export class ApiError extends Error {
 
 let refreshPromise = null;
 
-async function refreshAccessToken(base) {
+export async function refreshAccessToken(base = API_BASE_URL) {
   const refreshToken = tokenStorage.getRefreshToken();
   if (!refreshToken) return null;
 
@@ -61,13 +61,19 @@ async function refreshAccessToken(base) {
             return newAccessToken;
           }
         }
-        // If refresh failed, clear invalid tokens
+        // If refresh failed, clear invalid tokens and dispatch session expired event
         tokenStorage.clear();
         localStorage.removeItem('mybook_user_cache');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth:session-expired'));
+        }
         return null;
       } catch {
         tokenStorage.clear();
         localStorage.removeItem('mybook_user_cache');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth:session-expired'));
+        }
         return null;
       } finally {
         refreshPromise = null;
@@ -86,12 +92,20 @@ export async function apiRequest(endpoint, { method = 'GET', body, headers = {},
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const url = `${base}${path}`;
 
+  const nonRefreshableEndpoints = ['/auth/login', '/auth/register', '/auth/refresh'];
+  const isAuthEntryRoute = nonRefreshableEndpoints.some((ep) => endpoint.startsWith(ep));
+
   const requestHeaders = {
     'Content-Type': 'application/json',
     ...headers,
   };
 
-  const token = tokenStorage.getAccessToken();
+  let token = tokenStorage.getAccessToken();
+  // If accessToken is missing but refreshToken is present, attempt proactive refresh
+  if (!token && tokenStorage.getRefreshToken() && !isAuthEntryRoute) {
+    token = await refreshAccessToken(base);
+  }
+
   if (token && !requestHeaders.Authorization) {
     requestHeaders.Authorization = `Bearer ${token}`;
   }
@@ -110,8 +124,8 @@ export async function apiRequest(endpoint, { method = 'GET', body, headers = {},
     let response = await fetch(url, config);
     const durationMs = Math.round(performance.now() - startTime);
 
-    // If unauthorized and not an auth route, try refreshing the token once
-    if (response.status === 401 && !endpoint.startsWith('/auth')) {
+    // If unauthorized and not an auth entry route, try refreshing the token once
+    if (response.status === 401 && !isAuthEntryRoute) {
       const refreshedToken = await refreshAccessToken(base);
       if (refreshedToken) {
         config.headers.Authorization = `Bearer ${refreshedToken}`;
@@ -136,8 +150,8 @@ export async function apiRequest(endpoint, { method = 'GET', body, headers = {},
 
     return { data, status: response.status, durationMs };
   } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(error.message || 'Network error occurred', 0, null);
+    if (error instanceof ApiError || (error && typeof error.status === 'number')) throw error;
+    throw new ApiError(error?.message || 'Network error occurred', 0, null);
   }
 }
 
@@ -276,6 +290,201 @@ export const companyService = {
 
   async updateProfile(profileData) {
     const res = await api.put('/company', profileData);
+    return res.data;
+  },
+};
+
+// Contacts Service Endpoints (Stores & syncs directly with PostgreSQL DB)
+export const contactsService = {
+  async list({ page = 1, limit = 50, search = '', hasOutstanding = false } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
+    if (search) params.append('search', search);
+    if (hasOutstanding) params.append('hasOutstanding', 'true');
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await api.get(`/contacts${query}`);
+    return res.data;
+  },
+
+  async getById(id) {
+    const res = await api.get(`/contacts/${id}`);
+    return res.data;
+  },
+
+  async create(contactData) {
+    const res = await api.post('/contacts', contactData);
+    return res.data;
+  },
+
+  async update(id, contactData) {
+    const res = await api.put(`/contacts/${id}`, contactData);
+    return res.data;
+  },
+
+  async delete(id) {
+    const res = await api.delete(`/contacts/${id}`);
+    return res.data;
+  },
+};
+
+// Products Service Endpoints (Stores & syncs directly with PostgreSQL DB)
+export const productsService = {
+  async list({ page = 1, limit = 50, search = '', category = '', status = '', sortBy = 'createdAt', sortOrder = 'desc' } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
+    if (search) params.append('search', search);
+    if (category && category !== 'All') params.append('category', category);
+    if (status && status !== 'All') params.append('status', status);
+    if (sortBy) params.append('sortBy', sortBy);
+    if (sortOrder) params.append('sortOrder', sortOrder);
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await api.get(`/products${query}`);
+    return res.data;
+  },
+
+  async getCategories() {
+    const res = await api.get('/products/categories');
+    return res.data;
+  },
+
+  async getById(id) {
+    const res = await api.get(`/products/${id}`);
+    return res.data;
+  },
+
+  async create(productData) {
+    const res = await api.post('/products', productData);
+    return res.data;
+  },
+
+  async update(id, productData) {
+    const res = await api.put(`/products/${id}`, productData);
+    return res.data;
+  },
+
+  async adjustStock(id, { type, quantityKg, notes }) {
+    const res = await api.post(`/products/${id}/adjust-stock`, { type, quantityKg, notes });
+    return res.data;
+  },
+
+  async delete(id) {
+    const res = await api.delete(`/products/${id}`);
+    return res.data;
+  },
+};
+
+// Sales Service Endpoints (Stores & syncs directly with PostgreSQL DB)
+export const salesService = {
+  async list({ page = 1, limit = 50, search = '', status = '', customerId = '' } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
+    if (search) params.append('search', search);
+    if (status && status !== 'ALL') params.append('status', status.toUpperCase());
+    if (customerId) params.append('customerId', customerId);
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await api.get(`/sales${query}`);
+    return res.data;
+  },
+
+  async getById(id) {
+    const res = await api.get(`/sales/${id}`);
+    return res.data;
+  },
+
+  async create(saleData) {
+    const res = await api.post('/sales', saleData);
+    return res.data;
+  },
+
+  async recordPayment(id, paymentData) {
+    const res = await api.post(`/sales/${id}/payments`, paymentData);
+    return res.data;
+  },
+
+  async voidPayment(id, paymentId) {
+    const res = await api.post(`/sales/${id}/payments/${paymentId}/void`);
+    return res.data;
+  },
+
+  async void(id, reasonData = {}) {
+    const res = await api.post(`/sales/${id}/void`, reasonData);
+    return res.data;
+  },
+
+  async delete(id) {
+    const res = await api.delete(`/sales/${id}`);
+    return res.data;
+  },
+};
+
+// Purchases Service Endpoints (Stores & syncs directly with PostgreSQL DB)
+export const purchasesService = {
+  async list({ page = 1, limit = 50, search = '', status = '', supplierId = '' } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
+    if (search) params.append('search', search);
+    if (status && status !== 'ALL') params.append('status', status.toUpperCase());
+    if (supplierId) params.append('supplierId', supplierId);
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await api.get(`/purchases${query}`);
+    return res.data;
+  },
+
+  async getById(id) {
+    const res = await api.get(`/purchases/${id}`);
+    return res.data;
+  },
+
+  async create(purchaseData) {
+    const res = await api.post('/purchases', purchaseData);
+    return res.data;
+  },
+
+  async createReceipt(id, receiptData) {
+    const res = await api.post(`/purchases/${id}/receipts`, receiptData);
+    return res.data;
+  },
+
+  async voidReceipt(id, receiptId) {
+    const res = await api.post(`/purchases/${id}/receipts/${receiptId}/void`);
+    return res.data;
+  },
+
+  async createBill(id, billData) {
+    const res = await api.post(`/purchases/${id}/bills`, billData);
+    return res.data;
+  },
+
+  async voidBill(id, billId) {
+    const res = await api.post(`/purchases/${id}/bills/${billId}/void`);
+    return res.data;
+  },
+
+  async recordPayment(id, paymentData) {
+    const res = await api.post(`/purchases/${id}/payments`, paymentData);
+    return res.data;
+  },
+
+  async voidPayment(id, paymentId) {
+    const res = await api.post(`/purchases/${id}/payments/${paymentId}/void`);
+    return res.data;
+  },
+
+  async void(id, reasonData = {}) {
+    const res = await api.post(`/purchases/${id}/void`, reasonData);
+    return res.data;
+  },
+
+  async delete(id) {
+    const res = await api.delete(`/purchases/${id}`);
     return res.data;
   },
 };

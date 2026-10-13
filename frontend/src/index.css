@@ -59,6 +59,13 @@ input, textarea, select {
   font-family: inherit;
 }
 
+/* Suppress native datalist/autocomplete arrow indicators on text inputs */
+input:not([type="date"]):not([type="time"]):not([type="datetime-local"])::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+  -webkit-appearance: none;
+}
+
 .animated-gradient-text {
   background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 50%, #8b5cf6 100%);
   -webkit-background-clip: text;

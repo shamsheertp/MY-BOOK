@@ -1,43 +1,75 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { PurchasesHeader } from './components/PurchasesHeader';
 import { PurchasesFilters } from './components/PurchasesFilters';
 import { PurchasesTable } from './components/PurchasesTable';
 import { PurchasesSkeleton } from './components/PurchasesSkeleton';
-import purchasesData from '../../db/purchases.json';
-import contactsData from '../../db/contacts.json';
+import { purchasesService, contactsService } from '../../services/api';
 
 export default function Purchases() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
+  const [purchases, setPurchases] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [pagination, setPagination] = useState({ totalPages: 1, totalItems: 0 });
   const itemsPerPage = 10;
 
+  // Load contacts for supplier lookup fallback
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
+    let isMounted = true;
+    contactsService.list({ limit: 100 }).then((res) => {
+      if (isMounted) {
+        const rawContacts = res?.data?.contacts || res?.data || res || [];
+        const contactList = Array.isArray(rawContacts) ? rawContacts : [];
+        setContacts(contactList);
+      }
+    }).catch((err) => console.error('Failed to load contacts for purchases:', err));
+
+    return () => { isMounted = false; };
   }, []);
 
-  const getSupplierName = (supplierId) => {
-    if (!supplierId) return '';
-    const suffix = String(supplierId).includes('-') ? String(supplierId).substring(String(supplierId).indexOf('-') + 1) : String(supplierId);
-    const c = contactsData.find(c => c.id === `CONT-${suffix}`);
+  const loadPurchases = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await purchasesService.list({
+        search: searchTerm,
+        status: statusFilter,
+        page: currentPage,
+        limit: itemsPerPage,
+      });
+
+      if (res?.success && Array.isArray(res.data)) {
+        setPurchases(res.data);
+        if (res.pagination) {
+          setPagination(res.pagination);
+        }
+      } else if (Array.isArray(res)) {
+        setPurchases(res);
+      }
+    } catch (error) {
+      console.error('Failed to load purchases:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchTerm, statusFilter, currentPage]);
+
+  useEffect(() => {
+    loadPurchases();
+  }, [loadPurchases]);
+
+  const getSupplierName = (supplierId, purchaseSupplierName) => {
+    if (purchaseSupplierName) return purchaseSupplierName;
+    if (!supplierId) return 'Unknown Supplier';
+    const c = contacts.find(c => c.id === supplierId || String(c.id).includes(String(supplierId)));
     return c?.contactName || c?.companyName || supplierId;
   };
-
-  const filteredPurchases = purchasesData.filter(purchase => {
-    const supplierName = getSupplierName(purchase.supplierId);
-    const matchesSearch = purchase.ref.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          supplierName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || (purchase.status || '').toUpperCase() === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
 
-  if (isLoading) return <PurchasesSkeleton />;
+  if (isLoading && purchases.length === 0) return <PurchasesSkeleton />;
 
   return (
     <div className="max-w-7xl mx-auto fade-in px-4 sm:px-0">
@@ -52,11 +84,15 @@ export default function Purchases() {
         />
         
         <PurchasesTable 
-          purchases={filteredPurchases}
+          purchases={purchases}
           currentPage={currentPage}
           itemsPerPage={itemsPerPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
           onPageChange={setCurrentPage}
           getSupplierName={getSupplierName}
+          contacts={contacts}
+          onRefresh={loadPurchases}
         />
       </div>
     </div>

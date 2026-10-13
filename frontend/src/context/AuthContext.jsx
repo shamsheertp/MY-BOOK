@@ -19,13 +19,30 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Listen for global session expiration dispatched by API service
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null);
+      setToken(null);
+      tokenStorage.clear();
+      localStorage.removeItem(USER_STORAGE_KEY);
+    };
+
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('auth:session-expired', handleSessionExpired);
+    };
+  }, []);
+
   // Sync token and verify user on mount
   useEffect(() => {
     let isMounted = true;
 
     async function initAuth() {
       const storedToken = tokenStorage.getAccessToken();
-      if (!storedToken) {
+      const storedRefreshToken = tokenStorage.getRefreshToken();
+
+      if (!storedToken && !storedRefreshToken) {
         if (isMounted) {
           setUser(null);
           setToken(null);
@@ -37,18 +54,18 @@ export function AuthProvider({ children }) {
       try {
         const response = await authService.getCurrentUser();
         if (isMounted && response?.data?.user) {
+          const activeToken = tokenStorage.getAccessToken() || storedToken;
           setUser(response.data.user);
+          setToken(activeToken);
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.data.user));
         }
       } catch (err) {
-        // If token is invalid or expired, clear cache
-        if (err.status === 401 || err.status === 403) {
-          tokenStorage.clear();
-          localStorage.removeItem(USER_STORAGE_KEY);
-          if (isMounted) {
-            setUser(null);
-            setToken(null);
-          }
+        // If getting current user failed (invalid/expired tokens and refresh failed), clear session
+        tokenStorage.clear();
+        localStorage.removeItem(USER_STORAGE_KEY);
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
         }
       } finally {
         if (isMounted) setIsLoading(false);

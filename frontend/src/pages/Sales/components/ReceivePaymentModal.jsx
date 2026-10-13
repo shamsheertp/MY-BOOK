@@ -1,6 +1,14 @@
 import { X, Upload, CheckCircle2 } from 'lucide-react';
 
-export function ReceivePaymentModal({ isOpen, onClose, balance, paymentForm, setPaymentForm, onSave }) {
+export function ReceivePaymentModal({ 
+  isOpen, 
+  onClose, 
+  balance, 
+  paymentForm, 
+  setPaymentForm, 
+  onSave, 
+  isSubmitting = false 
+}) {
   if (!isOpen) return null;
 
   return (
@@ -24,14 +32,13 @@ export function ReceivePaymentModal({ isOpen, onClose, balance, paymentForm, set
             <div className="relative">
               <span className="absolute left-4 top-3.5 text-slate-400 font-medium">₹</span>
               <input 
-                type="text" 
-                value={paymentForm.amount ? Number(paymentForm.amount).toLocaleString('en-IN') : ''}
-                onChange={(e) => {
-                  const rawValue = e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, '');
-                  setPaymentForm({...paymentForm, amount: rawValue});
-                }}
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})}
                 className="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                placeholder={balance.toLocaleString('en-IN')}
+                placeholder={balance.toString()}
               />
             </div>
           </div>
@@ -96,17 +103,24 @@ export function ReceivePaymentModal({ isOpen, onClose, balance, paymentForm, set
 
         <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
           <button 
+            type="button"
             onClick={onClose}
-            className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
+            disabled={isSubmitting}
+            className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
           >
             Cancel
           </button>
           <button 
+            type="button"
             onClick={onSave}
-            disabled={!paymentForm.amount}
-            className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            disabled={!paymentForm.amount || isSubmitting}
+            className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center cursor-pointer"
           >
-            <CheckCircle2 className="w-4 h-4 mr-2" />
+            {isSubmitting ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+            )}
             Save Payment
           </button>
         </div>

@@ -80,3 +80,232 @@ model CompanyProfile {
   @@map("company_profiles")
 }
 
+model Contact {
+  id          String      @id @default(uuid())
+  code        String?     @unique
+  contactName String
+  companyName String?
+  email       String?
+  phone       String?
+  taxNumber   String?
+  address     String?     @db.Text
+  notes       String?     @db.Text
+  receivables Decimal     @default(0.00) @db.Decimal(12, 2)
+  payables    Decimal     @default(0.00) @db.Decimal(12, 2)
+  avatar      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  sales       Sale[]
+  purchases   Purchase[]
+
+  @@map("contacts")
+}
+
+model Product {
+  id                String     @id @default(uuid())
+  sku               String     @unique
+  name              String
+  category          String     @default("General")
+  costPricePerKg    Decimal    @default(0.00) @db.Decimal(12, 2)
+  sellingPricePerKg Decimal    @default(0.00) @db.Decimal(12, 2)
+  stockKg           Decimal    @default(0.00) @db.Decimal(12, 2)
+  minStockKg        Decimal    @default(10.00) @db.Decimal(12, 2)
+  unit              String     @default("kg")
+  description       String?    @db.Text
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
+
+  @@map("products")
+}
+
+enum SaleStatus {
+  DRAFT
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+  VOID
+}
+
+model Sale {
+  id              String        @id @default(uuid())
+  ref             String        @unique
+  date            DateTime      @default(now())
+  dueDate         DateTime?
+  customerId      String?
+  customerName    String
+  customerCompany String?
+  customerEmail   String?
+  customerPhone   String?
+  customerAddress String?       @db.Text
+  status          SaleStatus    @default(UNPAID)
+  subtotal        Decimal       @default(0.00) @db.Decimal(12, 2)
+  discount        Decimal       @default(0.00) @db.Decimal(12, 2)
+  tax             Decimal       @default(0.00) @db.Decimal(12, 2)
+  taxPercent      Decimal       @default(0.00) @db.Decimal(5, 2)
+  total           Decimal       @default(0.00) @db.Decimal(12, 2)
+  received        Decimal       @default(0.00) @db.Decimal(12, 2)
+  balance         Decimal       @default(0.00) @db.Decimal(12, 2)
+  notes           String?       @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  contact         Contact?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items           SaleItem[]
+  payments        SalePayment[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id          String   @id @default(uuid())
+  saleId      String
+  productId   String?
+  name        String
+  quantityKg  Decimal  @default(1.00) @db.Decimal(12, 2)
+  unitPrice   Decimal  @default(0.00) @db.Decimal(12, 2)
+  total       Decimal  @default(0.00) @db.Decimal(12, 2)
+
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@map("sale_items")
+}
+
+model SalePayment {
+  id        String   @id @default(uuid())
+  saleId    String
+  ref       String
+  date      DateTime @default(now())
+  amount    Decimal  @default(0.00) @db.Decimal(12, 2)
+  method    String   @default("Bank Transfer")
+  notes     String?
+  image     String?
+  voided    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@map("sale_payments")
+}
+
+enum PurchaseStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  COMPLETED
+  CANCELLED
+  VOID
+}
+
+model Purchase {
+  id                   String            @id @default(uuid())
+  ref                  String            @unique
+  date                 DateTime          @default(now())
+  expectedDeliveryDate DateTime?
+  supplierId           String?
+  supplierName         String
+  supplierCompany      String?
+  supplierEmail        String?
+  supplierPhone        String?
+  supplierAddress      String?           @db.Text
+  status               PurchaseStatus    @default(ORDERED)
+  subtotal             Decimal           @default(0.00) @db.Decimal(12, 2)
+  discount             Decimal           @default(0.00) @db.Decimal(12, 2)
+  tax                  Decimal           @default(0.00) @db.Decimal(12, 2)
+  taxPercent           Decimal           @default(0.00) @db.Decimal(5, 2)
+  total                Decimal           @default(0.00) @db.Decimal(12, 2)
+  paid                 Decimal           @default(0.00) @db.Decimal(12, 2)
+  balance              Decimal           @default(0.00) @db.Decimal(12, 2)
+  notes                String?           @db.Text
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  supplier             Contact?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items                PurchaseItem[]
+  receipts             PurchaseReceipt[]
+  bills                PurchaseBill[]
+  payments             PurchasePayment[]
+
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id         String   @id @default(uuid())
+  purchaseId String
+  productId  String?
+  name       String
+  orderedKg  Decimal  @default(1.00) @db.Decimal(12, 2)
+  receivedKg Decimal  @default(0.00) @db.Decimal(12, 2)
+  billedKg   Decimal  @default(0.00) @db.Decimal(12, 2)
+  unitPrice  Decimal  @default(0.00) @db.Decimal(12, 2)
+  total      Decimal  @default(0.00) @db.Decimal(12, 2)
+
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@map("purchase_items")
+}
+
+model PurchaseReceipt {
+  id            String   @id @default(uuid())
+  purchaseId    String
+  ref           String
+  date          DateTime @default(now())
+  itemsReceived Decimal  @default(0.00) @db.Decimal(12, 2)
+  status        String   @default("Received")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  purchase      Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_receipts")
+}
+
+model PurchaseBill {
+  id         String    @id @default(uuid())
+  purchaseId String
+  ref        String
+  date       DateTime  @default(now())
+  dueDate    DateTime?
+  amount     Decimal   @default(0.00) @db.Decimal(12, 2)
+  paid       Decimal   @default(0.00) @db.Decimal(12, 2)
+  balance    Decimal   @default(0.00) @db.Decimal(12, 2)
+  status     String    @default("UNPAID")
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  purchase   Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_bills")
+}
+
+model PurchasePayment {
+  id         String   @id @default(uuid())
+  purchaseId String
+  billId     String?
+  ref        String
+  date       DateTime @default(now())
+  amount     Decimal  @default(0.00) @db.Decimal(12, 2)
+  method     String   @default("Bank Transfer")
+  notes      String?
+  image      String?
+  voided     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_payments")
+}
+
+
