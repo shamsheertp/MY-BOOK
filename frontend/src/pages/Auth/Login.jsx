@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -25,7 +25,6 @@ export default function Login() {
     email: '',
     password: '',
     phone: '',
-    role: 'USER',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState('');
@@ -34,9 +33,11 @@ export default function Login() {
   const redirectPath = location.state?.from?.pathname || '/';
 
   // If already authenticated, redirect
-  if (isAuthenticated && !isSubmitting) {
-    navigate(redirectPath, { replace: true });
-  }
+  useEffect(() => {
+    if (isAuthenticated && !isSubmitting) {
+      navigate(redirectPath, { replace: true });
+    }
+  }, [isAuthenticated, isSubmitting, navigate, redirectPath]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({
@@ -88,7 +89,6 @@ export default function Login() {
         email: formData.email.trim(),
         password: formData.password,
         phone: formData.phone.trim() || undefined,
-        role: formData.role,
       });
 
       setIsSubmitting(false);
@@ -224,23 +224,6 @@ export default function Login() {
                       className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Role
-                  </label>
-                  <select
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                  >
-                    <option value="USER">User (Standard)</option>
-                    <option value="ACCOUNTANT">Accountant</option>
-                    <option value="MANAGER">Manager</option>
-                    <option value="ADMIN">Administrator</option>
-                  </select>
                 </div>
               </>
             )}

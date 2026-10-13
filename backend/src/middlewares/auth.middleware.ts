@@ -8,6 +8,7 @@ export interface AuthUserPayload {
   id: string;
   email: string;
   role: Role;
+  type?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -41,6 +42,14 @@ export const authenticate = async (
     }
 
     const decoded = jwt.verify(token, config.jwtSecret) as AuthUserPayload;
+
+    if (decoded.type === 'refresh' || (!decoded.type && !decoded.role)) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid token type.',
+      });
+      return;
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },

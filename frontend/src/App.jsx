@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter, Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Auth/Login';
 import UserManagement from './pages/Users/UserManagement';
@@ -31,12 +31,51 @@ import ProductDetails from './pages/Products/ProductDetails';
 import Reports from './pages/Reports/Reports';
 import WhatsAppSettings from './pages/Settings/Connect/WhatsApp/WhatsAppSettings';
 
-function AppLayout() {
+function ProtectedAppLayout() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-500 font-medium text-sm">Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
   return (
     <Layout>
       <Outlet />
     </Layout>
   );
+}
+
+function PublicRoute({ children }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-500 font-medium text-sm">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 }
 
 function App() {
@@ -45,10 +84,17 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* Public Authentication Route */}
-          <Route path="/login" element={<Login />} />
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            }
+          />
 
-          {/* App Routes with Layout */}
-          <Route element={<AppLayout />}>
+          {/* Protected App Routes with Layout */}
+          <Route element={<ProtectedAppLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/contacts" element={<Contacts />} />

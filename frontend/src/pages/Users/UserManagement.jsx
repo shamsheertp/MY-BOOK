@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import {
   Users,
   UserPlus,
@@ -44,7 +45,8 @@ const getRoleBadge = (role) => ROLE_BADGES[role] || ROLE_BADGES.USER;
 const getStatusBadge = (status) => STATUS_BADGES[status] || 'bg-slate-50 text-slate-700 border-slate-200';
 
 export default function UserManagement() {
-  const { user: currentUser, isAuthenticated, login } = useAuth();
+  const { user: currentUser, isAuthenticated, isLoading: authLoading } = useAuth();
+  const location = useLocation();
   const [users, setUsers] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [isLoading, setIsLoading] = useState(true);
@@ -63,6 +65,7 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState(null);
   const [passwordTargetUser, setPasswordTargetUser] = useState(null);
   const [deleteTargetUser, setDeleteTargetUser] = useState(null);
+  const requestIdRef = useRef(0);
 
   // Debounce search to prevent excessive backend queries
   useEffect(() => {
@@ -74,9 +77,10 @@ export default function UserManagement() {
 
   // Fetch users from backend DB with race condition guard
   const fetchUsers = useCallback(async (page = 1) => {
+    const requestId = ++requestIdRef.current;
     setIsLoading(true);
     setError(null);
-    let active = true;
+    const isActive = () => requestId === requestIdRef.current;
 
     try {
       const res = await usersService.list({
@@ -87,35 +91,45 @@ export default function UserManagement() {
         status: statusFilter,
       });
 
-      if (active && res?.data?.users) {
+      if (isActive() && res?.data?.users) {
         setUsers(res.data.users);
         if (res.data.pagination) {
           setPagination(res.data.pagination);
         }
       }
     } catch (err) {
-      if (active) {
+      if (isActive()) {
         setError(err.message || 'Failed to load users from database.');
       }
     } finally {
-      if (active) {
+      if (isActive()) {
         setIsLoading(false);
       }
     }
-
-    return () => {
-      active = false;
-    };
   }, [debouncedSearch, roleFilter, statusFilter, pagination.limit]);
 
   useEffect(() => {
-    fetchUsers(1);
-  }, [fetchUsers]);
+    if (isAuthenticated) {
+      fetchUsers(1);
+    }
+  }, [fetchUsers, isAuthenticated]);
 
   const showNotification = (msg) => {
     setActionSuccess(msg);
     setTimeout(() => setActionSuccess(''), 4000);
   };
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
   // Status Change Handler
   const handleStatusChange = async (userId, newStatus) => {
@@ -164,39 +178,7 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* Unauthenticated Alert Banner */}
-      {!isAuthenticated && (
-        <div className="p-6 bg-gradient-to-r from-indigo-50/90 to-cyan-50/90 border border-indigo-200/80 rounded-3xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-md shadow-indigo-500/25 shrink-0 mt-0.5 sm:mt-0">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-800 text-sm">Authentication Notice</h3>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Logged in as guest. Click below to authenticate as Administrator if needed.
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-            <button
-              onClick={async () => {
-                const res = await login('admin', 'admin123');
-                if (res.success) {
-                  showNotification('Signed in as Admin!');
-                  fetchUsers(1);
-                } else {
-                  setError(res.error);
-                }
-              }}
-              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-700 hover:to-cyan-600 text-white text-xs font-semibold rounded-xl shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
-            >
-              1-Click Sign In (admin)
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Notifications */}
       {actionSuccess && (

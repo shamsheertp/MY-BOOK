@@ -34,44 +34,48 @@ export class ApiError extends Error {
   }
 }
 
-let autoLoginPromise = null;
+let refreshPromise = null;
 
-async function getOrFetchAccessToken(base) {
-  const token = tokenStorage.getAccessToken();
-  if (token) return token;
+async function refreshAccessToken(base) {
+  const refreshToken = tokenStorage.getRefreshToken();
+  if (!refreshToken) return null;
 
-  if (!autoLoginPromise) {
-    autoLoginPromise = (async () => {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
       try {
-        const loginRes = await fetch(`${base}/auth/login`, {
+        const refreshRes = await fetch(`${base}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'admin', password: 'admin123' }),
+          body: JSON.stringify({ refreshToken }),
         });
-        if (loginRes.ok) {
-          const loginData = await loginRes.json();
-          if (loginData?.data?.tokens?.accessToken) {
-            const newToken = loginData.data.tokens.accessToken;
-            tokenStorage.setAccessToken(newToken);
-            if (loginData.data.tokens.refreshToken) {
-              tokenStorage.setRefreshToken(loginData.data.tokens.refreshToken);
+        if (refreshRes.ok) {
+          const resData = await refreshRes.json();
+          const payload = resData?.data;
+          const newAccessToken = payload?.tokens?.accessToken || payload?.accessToken;
+          const newRefreshToken = payload?.tokens?.refreshToken || payload?.refreshToken;
+          if (newAccessToken) {
+            tokenStorage.setAccessToken(newAccessToken);
+            if (newRefreshToken) {
+              tokenStorage.setRefreshToken(newRefreshToken);
             }
-            if (loginData.data.user) {
-              localStorage.setItem('mybook_user_cache', JSON.stringify(loginData.data.user));
-            }
-            return newToken;
+            return newAccessToken;
           }
         }
+        // If refresh failed, clear invalid tokens
+        tokenStorage.clear();
+        localStorage.removeItem('mybook_user_cache');
+        return null;
       } catch {
-        // Ignore error
+        tokenStorage.clear();
+        localStorage.removeItem('mybook_user_cache');
+        return null;
       } finally {
-        autoLoginPromise = null;
+        refreshPromise = null;
       }
-      return null;
     })();
   }
 
-  return autoLoginPromise;
+  return refreshPromise;
 }
 
 /**
@@ -87,11 +91,7 @@ export async function apiRequest(endpoint, { method = 'GET', body, headers = {},
     ...headers,
   };
 
-  let token = tokenStorage.getAccessToken();
-  if (!token && !endpoint.startsWith('/auth') && !endpoint.startsWith('/health')) {
-    token = await getOrFetchAccessToken(base);
-  }
-
+  const token = tokenStorage.getAccessToken();
   if (token && !requestHeaders.Authorization) {
     requestHeaders.Authorization = `Bearer ${token}`;
   }
@@ -110,25 +110,12 @@ export async function apiRequest(endpoint, { method = 'GET', body, headers = {},
     let response = await fetch(url, config);
     const durationMs = Math.round(performance.now() - startTime);
 
-    // If unauthorized and not an auth route, try re-authenticating once
+    // If unauthorized and not an auth route, try refreshing the token once
     if (response.status === 401 && !endpoint.startsWith('/auth')) {
-      try {
-        const loginRes = await fetch(`${base}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'admin', password: 'admin123' }),
-        });
-        if (loginRes.ok) {
-          const loginData = await loginRes.json();
-          const newToken = loginData?.data?.tokens?.accessToken;
-          if (newToken) {
-            tokenStorage.setAccessToken(newToken);
-            config.headers.Authorization = `Bearer ${newToken}`;
-            response = await fetch(url, config);
-          }
-        }
-      } catch {
-        // Fallback to error handling below
+      const refreshedToken = await refreshAccessToken(base);
+      if (refreshedToken) {
+        config.headers.Authorization = `Bearer ${refreshedToken}`;
+        response = await fetch(url, config);
       }
     }
 
@@ -188,19 +175,28 @@ export async function checkBackendHealth() {
 export const authService = {
   async login(email, password) {
     const res = await api.post('/auth/login', { email, password });
-    if (res.data?.data?.accessToken) {
-      tokenStorage.setAccessToken(res.data.data.accessToken);
-      if (res.data.data.refreshToken) {
-        tokenStorage.setRefreshToken(res.data.data.refreshToken);
-      }
+    const payload = res.data?.data;
+    const accessToken = payload?.tokens?.accessToken || payload?.accessToken;
+    const refreshToken = payload?.tokens?.refreshToken || payload?.refreshToken;
+    if (accessToken) {
+      tokenStorage.setAccessToken(accessToken);
+    }
+    if (refreshToken) {
+      tokenStorage.setRefreshToken(refreshToken);
     }
     return res.data;
   },
 
   async register(userData) {
     const res = await api.post('/auth/register', userData);
-    if (res.data?.data?.accessToken) {
-      tokenStorage.setAccessToken(res.data.data.accessToken);
+    const payload = res.data?.data;
+    const accessToken = payload?.tokens?.accessToken || payload?.accessToken;
+    const refreshToken = payload?.tokens?.refreshToken || payload?.refreshToken;
+    if (accessToken) {
+      tokenStorage.setAccessToken(accessToken);
+    }
+    if (refreshToken) {
+      tokenStorage.setRefreshToken(refreshToken);
     }
     return res.data;
   },
@@ -220,6 +216,7 @@ export const authService = {
       // Ignore error during logout
     } finally {
       tokenStorage.clear();
+      localStorage.removeItem('mybook_user_cache');
     }
   },
 };

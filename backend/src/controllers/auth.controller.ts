@@ -12,7 +12,6 @@ export const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   phone: z.string().optional(),
-  role: z.nativeEnum(Role).optional(),
 });
 
 export const loginSchema = z.object({
@@ -26,13 +25,13 @@ export const refreshSchema = z.object({
 
 const generateTokens = (user: { id: string; email: string; role: Role }) => {
   const accessToken = jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, type: 'access' },
     config.jwtSecret,
     { expiresIn: config.jwtExpiresIn } as jwt.SignOptions
   );
 
   const refreshToken = jwt.sign(
-    { id: user.id, email: user.email },
+    { id: user.id, email: user.email, type: 'refresh' },
     config.jwtSecret,
     { expiresIn: '30d' }
   );
@@ -46,7 +45,7 @@ export const register = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { name, email, password, phone, role } = req.body;
+    const { name, email, password, phone } = req.body;
 
     const existingUser = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -68,7 +67,7 @@ export const register = async (
         email: email.toLowerCase(),
         password: hashedPassword,
         phone,
-        role: role || Role.USER,
+        role: Role.USER,
       },
       select: {
         id: true,
@@ -134,19 +133,19 @@ export const login = async (
       return;
     }
 
-    if (user.status !== 'ACTIVE') {
-      res.status(403).json({
-        success: false,
-        message: `Account is ${user.status.toLowerCase()}. Please contact an administrator.`,
-      });
-      return;
-    }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       res.status(401).json({
         success: false,
         message: 'Invalid email or password.',
+      });
+      return;
+    }
+
+    if (user.status !== 'ACTIVE') {
+      res.status(403).json({
+        success: false,
+        message: `Account is ${user.status.toLowerCase()}. Please contact an administrator.`,
       });
       return;
     }

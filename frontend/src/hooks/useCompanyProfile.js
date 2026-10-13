@@ -19,37 +19,41 @@ export const getCompanyProfile = () => {
 };
 
 export const saveCompanyProfile = (profile) => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-  window.dispatchEvent(new Event(EVENT_NAME));
-
-  // Sync to PostgreSQL DB in background
-  companyService.updateProfile(profile).catch((err) => {
-    console.warn('Could not sync company profile to backend DB:', err.message);
-  });
+  // Sync to PostgreSQL DB, then persist locally on confirmation
+  companyService.updateProfile(profile)
+    .then((res) => {
+      const updatedProfile = res?.data?.companyProfile || profile;
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProfile));
+        window.dispatchEvent(new Event(EVENT_NAME));
+      }
+    })
+    .catch((err) => {
+      console.warn('Could not sync company profile to backend DB:', err.message);
+    });
 };
 
 export const saveCompanyProfileAsync = async (profile) => {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-    window.dispatchEvent(new Event(EVENT_NAME));
-  }
-
   // Persist directly to DB
   const res = await companyService.updateProfile(profile);
-  if (res?.data?.companyProfile) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data.companyProfile));
+  const updatedProfile = res?.data?.companyProfile || profile;
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProfile));
     window.dispatchEvent(new Event(EVENT_NAME));
-    return res.data.companyProfile;
   }
-  return profile;
+  return updatedProfile;
 };
 
-export const resetCompanyProfile = () => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
-  localStorage.removeItem(STORAGE_KEY);
-  window.dispatchEvent(new Event(EVENT_NAME));
-  companyService.updateProfile(defaultCompanyProfile).catch(() => {});
+export const resetCompanyProfile = async () => {
+  const res = await companyService.updateProfile(defaultCompanyProfile);
+  const updatedProfile = res?.data?.companyProfile || defaultCompanyProfile;
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new Event(EVENT_NAME));
+  }
+  return updatedProfile;
 };
 
 /** Formats the multi-part address into display lines */

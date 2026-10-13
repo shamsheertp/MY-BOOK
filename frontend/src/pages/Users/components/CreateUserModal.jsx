@@ -1,9 +1,16 @@
 import { useState } from 'react';
-import { UserPlus, X } from 'lucide-react';
+import { UserPlus, X, Shield } from 'lucide-react';
 import { usersService } from '../../../services/api';
 
 const ROLES = ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'USER'];
 const STATUSES = ['ACTIVE', 'INACTIVE', 'SUSPENDED'];
+
+const ROLE_DESCRIPTIONS = {
+  ADMIN: 'Full administrative access: User management, system settings, financial controls, and logs.',
+  MANAGER: 'Managerial permissions: Operational dashboards, approvals, staff records, and sales summaries.',
+  ACCOUNTANT: 'Financial controls: Invoices, ledgers, transaction records, tax reporting, and balance sheets.',
+  USER: 'Standard access: View assigned workspaces, update personal information, and basic entry.',
+};
 
 export default function CreateUserModal({ isOpen, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
@@ -140,6 +147,14 @@ export default function CreateUserModal({ isOpen, onClose, onSuccess }) {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+          </div>
+
+          <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-start gap-2.5">
+            <Shield className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-indigo-950">Role Permissions: {formData.role}</p>
+              <p className="text-indigo-700/90 mt-0.5 leading-relaxed">{ROLE_DESCRIPTIONS[formData.role]}</p>
+            </div>
           </div>
 
           <div className="pt-4 flex items-center justify-end gap-3">

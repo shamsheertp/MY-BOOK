@@ -47,13 +47,24 @@ const Field = memo(function Field({ label, name, value, onChange, placeholder, f
 });
 
 
+const normalizeProfile = (data) => {
+  if (!data || typeof data !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(data).map(([k, v]) => [
+      k,
+      k === 'showBankOnInvoice' ? Boolean(v) : (v ?? ''),
+    ])
+  );
+};
+
 export default function CompanyProfile() {
-  const [form, setForm] = useState(getCompanyProfile);
+  const [form, setForm] = useState(() => normalizeProfile(getCompanyProfile()));
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
+  const isDirtyRef = useRef(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -61,7 +72,10 @@ export default function CompanyProfile() {
     companyService.getProfile()
       .then((res) => {
         if (isMounted && res?.data?.companyProfile) {
-          setForm(prev => ({ ...prev, ...res.data.companyProfile }));
+          setForm(prev => {
+            if (isDirtyRef.current) return prev;
+            return { ...prev, ...normalizeProfile(res.data.companyProfile) };
+          });
         }
       })
       .catch((err) => {
@@ -74,6 +88,7 @@ export default function CompanyProfile() {
     const { name, value, type, checked } = e.target;
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
     setErrors(er => ({ ...er, [name]: undefined }));
+    isDirtyRef.current = true;
     setIsDirty(true);
     setSaved(false);
   }, []);
@@ -89,6 +104,7 @@ export default function CompanyProfile() {
     reader.onload = () => {
       setForm(f => ({ ...f, logo: reader.result }));
       setErrors(er => ({ ...er, logo: undefined }));
+      isDirtyRef.current = true;
       setIsDirty(true);
       setSaved(false);
     };
@@ -113,9 +129,10 @@ export default function CompanyProfile() {
     try {
       const updated = await saveCompanyProfileAsync(form);
       if (updated) {
-        setForm(prev => ({ ...prev, ...updated }));
+        setForm(prev => ({ ...prev, ...normalizeProfile(updated) }));
       }
       setSaved(true);
+      isDirtyRef.current = false;
       setIsDirty(false);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -125,12 +142,21 @@ export default function CompanyProfile() {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!window.confirm('Reset company profile to default values?')) return;
-    resetCompanyProfile();
-    setForm(defaultCompanyProfile);
-    setErrors({});
-    setIsDirty(false);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await resetCompanyProfile();
+      setForm(normalizeProfile(defaultCompanyProfile));
+      setErrors({});
+      isDirtyRef.current = false;
+      setIsDirty(false);
+    } catch (err) {
+      setSaveError(err.message || 'Failed to reset company profile');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const deferredForm = useDeferredValue(form);

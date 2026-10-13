@@ -7,6 +7,8 @@ const USER_STORAGE_KEY = 'mybook_user_cache';
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
+      const storedToken = tokenStorage.getAccessToken();
+      if (!storedToken) return null;
       const cached = localStorage.getItem(USER_STORAGE_KEY);
       return cached ? JSON.parse(cached) : null;
     } catch {
@@ -24,18 +26,11 @@ export function AuthProvider({ children }) {
     async function initAuth() {
       const storedToken = tokenStorage.getAccessToken();
       if (!storedToken) {
-        // Auto-authenticate with seeded admin credentials for seamless workflow
-        try {
-          const autoRes = await authService.login('admin', 'admin123');
-          if (isMounted && autoRes?.data?.user) {
-            setUser(autoRes.data.user);
-            setToken(autoRes.data.tokens?.accessToken);
-            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(autoRes.data.user));
-          }
-        } catch {
-          if (isMounted) setUser(null);
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
+          setIsLoading(false);
         }
-        if (isMounted) setIsLoading(false);
         return;
       }
 
