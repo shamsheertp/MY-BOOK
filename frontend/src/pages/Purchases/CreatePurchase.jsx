@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Trash2, Calendar, FileText, User, Phone, Mail, MapPin,
 import { Link, useNavigate } from 'react-router-dom';
 import { contactsService, productsService, purchasesService, tokenStorage } from '../../services/api';
 import { CustomerModal } from '../Contacts/components/CustomerModal';
+import { CompactContactSelector } from '../../components/Common/CompactContactSelector';
 
 const ProductSelectorInput = memo(function ProductSelectorInput({
   value,
@@ -38,7 +39,7 @@ const ProductSelectorInput = memo(function ProductSelectorInput({
   }, [products, item.productId, value]);
 
   return (
-    <div ref={containerRef} className="relative w-full space-y-1.5">
+    <div ref={containerRef} className={`relative w-full space-y-1.5 ${isOpen ? 'z-50' : 'z-10'}`}>
       <div className="relative group">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <Package className="w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
@@ -103,7 +104,7 @@ const ProductSelectorInput = memo(function ProductSelectorInput({
 
       {/* Custom Autocomplete Dropdown Menu */}
       {isOpen && filtered.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200/90 rounded-2xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200/90 rounded-2xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
           <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/90 sticky top-0 backdrop-blur-sm flex justify-between items-center">
             <span>Catalog Items ({filtered.length})</span>
             <span className="text-[10px] text-slate-400 font-normal">Click to apply</span>
@@ -179,7 +180,10 @@ const PurchaseItemRow = memo(function PurchaseItemRow({
   onRemove,
 }) {
   return (
-    <tr className="group border-b border-slate-100 last:border-0 hover:bg-slate-50/40">
+    <tr 
+      style={{ position: 'relative', zIndex: totalItems - index }}
+      className="group border-b border-slate-100 last:border-0 hover:bg-slate-50/40"
+    >
       <td className="py-3 px-2 align-top">
         <ProductSelectorInput
           value={item.name}
@@ -194,8 +198,8 @@ const PurchaseItemRow = memo(function PurchaseItemRow({
           <input 
             type="number" 
             step="any"
-            min="0.01"
-            placeholder="1.00"
+            min="0"
+            placeholder="0"
             value={item.qty}
             onChange={(e) => onChange(item.id, 'qty', e.target.value)}
             className="w-full pr-8 pl-3 py-2.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 rounded-xl outline-none transition-all font-bold text-center text-slate-800 text-sm shadow-sm"
@@ -270,7 +274,7 @@ export default function CreatePurchase() {
   }));
 
   const [items, setItems] = useState([
-    { id: 1, productId: null, name: '', qty: 1, price: 0 }
+    { id: 1, productId: null, name: '', qty: '', price: 0 }
   ]);
 
   const [discount, setDiscount] = useState(0);
@@ -347,8 +351,25 @@ export default function CreatePurchase() {
     });
   }, [contacts, contactSearchQuery]);
 
-  const handleSelectContact = (contactId) => {
-    const selected = contacts.find(c => c.id === contactId || c.code === contactId);
+  const handleSelectContact = (target) => {
+    if (!target) {
+      setPurchase(prev => ({
+        ...prev,
+        supplierId: '',
+        supplierName: '',
+        supplierCompany: '',
+        supplierEmail: '',
+        supplierPhone: '',
+        supplierAddress: '',
+        supplierTaxNumber: '',
+        payables: 0,
+        receivables: 0,
+      }));
+      return;
+    }
+
+    const contactId = target?.id || target?.code || target?.target?.value || (typeof target === 'string' ? target : null);
+    const selected = (typeof target === 'object' && target?.id) ? target : contacts.find(c => c.id === contactId || c.code === contactId);
     if (selected) {
       setPurchase(prev => ({
         ...prev,
@@ -405,7 +426,7 @@ export default function CreatePurchase() {
   }, []);
 
   const addItem = useCallback(() => {
-    setItems(prev => [...prev, { id: Date.now(), productId: null, name: '', qty: 1, price: 0 }]);
+    setItems(prev => [...prev, { id: Date.now(), productId: null, name: '', qty: '', price: 0 }]);
   }, []);
 
   const removeItem = useCallback((id) => {
@@ -510,150 +531,24 @@ export default function CreatePurchase() {
         </div>
       </div>
 
-      <div className="glass-card bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+      <div className="glass-card bg-white rounded-3xl shadow-xl border border-slate-100">
         {/* Top Details Section */}
         <div className="p-8 border-b border-slate-100 bg-white">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:items-start">
             
             {/* Contact / Supplier Selection & Details */}
-            <div className="lg:col-span-6 space-y-4">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Contact Details *
-              </label>
-
-              {/* Selector & Quick Add Button */}
-              <div className="flex gap-2">
-                <div className="relative group flex-1">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User className="w-5 h-5 text-orange-400 group-focus-within:text-orange-600 transition-colors" />
-                  </div>
-                  <select 
-                    value={purchase.supplierId || ''}
-                    onChange={(e) => handleSelectContact(e.target.value)}
-                    className="w-full pl-12 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all cursor-pointer shadow-sm appearance-none"
-                  >
-                    <option value="" disabled className="font-normal text-slate-400">
-                      {isLoadingContacts 
-                        ? 'Loading contacts from DB...' 
-                        : filteredContacts.length > 0 
-                          ? `Select a contact (${filteredContacts.length} available)...` 
-                          : 'No contacts found in DB. Click + to add.'}
-                    </option>
-                    {filteredContacts.map(c => {
-                      const name = c.contactName || c.name || 'Unnamed';
-                      const company = c.companyName || c.company;
-                      const code = c.code ? ` (${c.code})` : '';
-                      return (
-                        <option key={c.id} value={c.id}>
-                          {name}{company ? ` - ${company}` : ''}{code}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => setShowSupplierModal(true)}
-                  className="flex items-center justify-center w-[50px] h-[50px] bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 rounded-xl transition-colors border border-orange-100 flex-shrink-0 shadow-sm cursor-pointer"
-                  title="Add New Contact"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
-
-              {!isLoadingContacts && contacts.length === 0 && (
-                <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-                  <span>No contacts found in database. Create a contact to link to this purchase order.</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowSupplierModal(true)}
-                    className="font-bold underline text-amber-900 hover:text-amber-700 ml-2"
-                  >
-                    + Add Contact
-                  </button>
-                </div>
-              )}
-
-              {/* Optional Contact Quick Search Input */}
-              {contacts.length > 5 && (
-                <div className="relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={contactSearchQuery}
-                    onChange={(e) => setContactSearchQuery(e.target.value)}
-                    placeholder="Search contacts by name, company, phone, email..."
-                    className="w-full pl-9 pr-8 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all"
-                  />
-                  {contactSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setContactSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Comprehensive Contact Details Card */}
-              {selectedContact && (
-                <div className="mt-3 bg-gradient-to-br from-slate-50 to-orange-50/30 rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-extrabold text-slate-800 text-base">
-                          {selectedContact.contactName || selectedContact.name || 'Unnamed Contact'}
-                        </span>
-                      </div>
-                      {(selectedContact.companyName || selectedContact.company) && (
-                        <div className="flex items-center text-xs font-bold text-slate-600 mt-1">
-                          <Building2 className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                          {selectedContact.companyName || selectedContact.company}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 pt-2 border-t border-slate-200/60">
-                    <div className="flex items-center space-x-1.5">
-                      <Phone className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                      <span className="font-medium truncate">{selectedContact.phone || 'No phone provided'}</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                      <Mail className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                      <span className="font-medium truncate">{selectedContact.email || 'No email provided'}</span>
-                    </div>
-                    <div className="flex items-start space-x-1.5 sm:col-span-2">
-                      <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" />
-                      <span className="font-medium">{selectedContact.address || 'No physical address on file'}</span>
-                    </div>
-                    {selectedContact.taxNumber && (
-                      <div className="flex items-center space-x-1.5 sm:col-span-2">
-                        <Receipt className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                        <span className="font-bold text-slate-700">TRN/GST: {selectedContact.taxNumber}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Financial Balance Summary for Contact */}
-                  {(selectedContact.payables > 0 || selectedContact.receivables > 0) && (
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 text-xs">
-                      {selectedContact.payables > 0 && (
-                        <span className="font-semibold text-rose-600">
-                          We Owe (Payables): ₹{Number(selectedContact.payables).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </span>
-                      )}
-                      {selectedContact.receivables > 0 && (
-                        <span className="font-semibold text-emerald-600">
-                          Owed to Us (Receivables): ₹{Number(selectedContact.receivables).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="lg:col-span-6">
+              <CompactContactSelector
+                label="Supplier / Contact *"
+                contacts={contacts}
+                selectedContact={selectedContact}
+                onSelect={handleSelectContact}
+                onClear={() => handleSelectContact(null)}
+                onAddNew={() => setShowSupplierModal(true)}
+                theme="orange"
+                placeholder="Search supplier by name, company, phone..."
+                isLoading={isLoadingContacts}
+              />
             </div>
 
             {/* PO Metadata Side */}
@@ -695,7 +590,7 @@ export default function CreatePurchase() {
 
         {/* Line Items */}
         <div className="p-8">
-          <div className="overflow-x-auto">
+          <div className="overflow-visible min-h-[260px]">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b-2 border-slate-200">

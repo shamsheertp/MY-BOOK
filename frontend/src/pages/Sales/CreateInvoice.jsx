@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Trash2, Calendar, FileText, User, Package, AlertCircle
 import { Link, useNavigate } from 'react-router-dom';
 import { contactsService, productsService, salesService, tokenStorage } from '../../services/api';
 import { CustomerModal } from '../Contacts/components/CustomerModal';
+import { CompactContactSelector } from '../../components/Common/CompactContactSelector';
 
 const SaleProductSelectorInput = memo(function SaleProductSelectorInput({
   value,
@@ -38,7 +39,7 @@ const SaleProductSelectorInput = memo(function SaleProductSelectorInput({
   }, [products, item.productId, value]);
 
   return (
-    <div ref={containerRef} className="relative w-full space-y-1.5">
+    <div ref={containerRef} className={`relative w-full space-y-1.5 ${isOpen ? 'z-50' : 'z-10'}`}>
       <div className="relative group">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <Package className="w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
@@ -103,7 +104,7 @@ const SaleProductSelectorInput = memo(function SaleProductSelectorInput({
 
       {/* Custom Autocomplete Dropdown Menu */}
       {isOpen && filtered.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200/90 rounded-2xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200/90 rounded-2xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
           <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/90 sticky top-0 backdrop-blur-sm flex justify-between items-center">
             <span>Catalog Items ({filtered.length})</span>
             <span className="text-[10px] text-slate-400 font-normal">Click to apply</span>
@@ -179,7 +180,10 @@ const LineItemRow = memo(function LineItemRow({
   onRemove 
 }) {
   return (
-    <tr className="group border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+    <tr 
+      style={{ position: 'relative', zIndex: totalItems - index }}
+      className="group border-b border-slate-100 last:border-0 hover:bg-slate-50/50"
+    >
       <td className="py-3 px-3 align-top">
         <SaleProductSelectorInput
           value={item.name}
@@ -193,9 +197,9 @@ const LineItemRow = memo(function LineItemRow({
         <div className="relative">
           <input
             type="number"
-            step="0.01"
-            min="0.01"
-            placeholder="1.00"
+            step="any"
+            min="0"
+            placeholder="0"
             value={item.qty}
             onChange={(e) => onChange(item.id, 'qty', e.target.value)}
             className="w-full pr-8 pl-3 py-2.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-xl outline-none transition-all font-bold text-center text-slate-800 text-sm shadow-sm"
@@ -270,7 +274,7 @@ export default function CreateInvoice() {
   }));
 
   const [items, setItems] = useState([
-    { id: 1, productId: null, name: '', qty: 1, price: 0 }
+    { id: 1, productId: null, name: '', qty: '', price: 0 }
   ]);
 
   const [discount, setDiscount] = useState(0);
@@ -318,10 +322,24 @@ export default function CreateInvoice() {
     loadData();
   }, [loadData]);
 
-  const handleCustomerSelect = (e) => {
-    const custId = e.target.value;
+  const handleCustomerSelect = (target) => {
+    if (!target) {
+      setInvoice(prev => ({
+        ...prev,
+        customerId: '',
+        customerName: '',
+        customerCompany: '',
+        customerEmail: '',
+        customerPhone: '',
+        customerAddress: '',
+      }));
+      return;
+    }
+
+    const custId = target?.id || target?.code || target?.target?.value || (typeof target === 'string' ? target : null);
     const safeContacts = Array.isArray(contacts) ? contacts : [];
-    const selected = safeContacts.find(c => c.id === custId || c.code === custId);
+    const selected = (typeof target === 'object' && target?.id) ? target : safeContacts.find(c => c.id === custId || c.code === custId);
+    
     if (selected) {
       setInvoice(prev => ({
         ...prev,
@@ -336,6 +354,19 @@ export default function CreateInvoice() {
       setInvoice(prev => ({ ...prev, customerId: custId }));
     }
   };
+
+  const selectedCustomer = useMemo(() => {
+    if (!invoice.customerId) return null;
+    const safeContacts = Array.isArray(contacts) ? contacts : [];
+    return safeContacts.find(c => c.id === invoice.customerId || c.code === invoice.customerId) || (invoice.customerName ? {
+      id: invoice.customerId,
+      contactName: invoice.customerName,
+      companyName: invoice.customerCompany,
+      phone: invoice.customerPhone,
+      email: invoice.customerEmail,
+      address: invoice.customerAddress,
+    } : null);
+  }, [contacts, invoice.customerId, invoice.customerName, invoice.customerCompany, invoice.customerPhone, invoice.customerEmail, invoice.customerAddress]);
 
   const handleItemChange = useCallback((id, field, value) => {
     setItems(prevItems => prevItems.map(item => {
@@ -364,7 +395,7 @@ export default function CreateInvoice() {
   }, []);
 
   const addItem = useCallback(() => {
-    setItems(prev => [...prev, { id: Date.now(), productId: null, name: '', qty: 1, price: 0 }]);
+    setItems(prev => [...prev, { id: Date.now(), productId: null, name: '', qty: '', price: 0 }]);
   }, []);
 
   const removeItem = useCallback((id) => {
@@ -488,54 +519,23 @@ export default function CreateInvoice() {
         </div>
       )}
 
-      <div className="glass-card bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+      <div className="glass-card bg-white rounded-3xl shadow-xl border border-slate-100">
         {/* Top Details Section */}
         <div className="p-8 border-b border-slate-100 bg-white">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:items-start">
             {/* Customer Details */}
-            <div className="lg:col-span-5 space-y-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Billed To (Customer) *
-              </label>
-              <div className="flex gap-2">
-                <div className="relative group flex-1">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <User className="w-4 h-4 text-indigo-400 group-focus-within:text-indigo-600 transition-colors" />
-                  </div>
-                  <select
-                    value={invoice.customerId}
-                    onChange={handleCustomerSelect}
-                    className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-bold focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-sm appearance-none text-sm"
-                  >
-                    <option value="" disabled className="font-normal text-slate-400">Select a customer from contacts...</option>
-                    {(Array.isArray(contacts) ? contacts : []).map(c => {
-                      const name = c.contactName || c.name || 'Unnamed';
-                      const company = c.companyName || c.company;
-                      return (
-                        <option key={c.id || c.code} value={c.id || c.code}>
-                          {name} {company ? `(${company})` : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowCustomerModal(true)}
-                  className="flex items-center justify-center w-[42px] h-[42px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 rounded-xl transition-colors border border-indigo-100 shrink-0 shadow-sm cursor-pointer"
-                  title="Add New Customer"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-
-              {invoice.customerId && (
-                <div className="mt-2 text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                  <p className="font-bold text-slate-700">{invoice.customerName} {invoice.customerCompany && `• ${invoice.customerCompany}`}</p>
-                  {invoice.customerAddress && <p className="mt-0.5">{invoice.customerAddress}</p>}
-                  {invoice.customerPhone && <p className="mt-0.5 font-mono">{invoice.customerPhone}</p>}
-                </div>
-              )}
+            <div className="lg:col-span-5">
+              <CompactContactSelector
+                label="Billed To (Customer) *"
+                contacts={contacts}
+                selectedContact={selectedCustomer}
+                onSelect={handleCustomerSelect}
+                onClear={() => handleCustomerSelect(null)}
+                onAddNew={() => setShowCustomerModal(true)}
+                theme="indigo"
+                placeholder="Search customer by name, company, phone..."
+                isLoading={false}
+              />
             </div>
 
             {/* Invoice Meta */}
@@ -581,7 +581,7 @@ export default function CreateInvoice() {
 
         {/* Line Items */}
         <div className="p-8">
-          <div className="overflow-x-auto">
+          <div className="overflow-visible min-h-[260px]">
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
                 <tr className="border-b-2 border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
