@@ -3,8 +3,6 @@ import { X, Calendar, Tag, CreditCard, DollarSign, AlignLeft, User, Hash, AlertC
 import { expensesService, paymentMethodsService } from '../../../services/api';
 
 export function EditExpenseModal({ isOpen, onClose, expense, onSave }) {
-  if (!isOpen || !expense) return null;
-
   const [categoriesList, setCategoriesList] = useState([]);
   const [paymentMethodsList, setPaymentMethodsList] = useState([]);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -12,21 +10,39 @@ export function EditExpenseModal({ isOpen, onClose, expense, onSave }) {
   const [newCatLoading, setNewCatLoading] = useState(false);
 
   const [formData, setFormData] = useState({
-    date: expense.date ? (expense.date.includes('T') ? expense.date.split('T')[0] : expense.date) : new Date().toISOString().split('T')[0],
-    category: expense.category || 'Office Supplies',
-    categoryId: expense.categoryId || null,
-    amount: expense.amount !== undefined ? expense.amount : '',
-    paymentMethod: expense.paymentMethod || 'Credit Card',
-    paymentMethodId: expense.paymentMethodId || null,
-    status: expense.status === 'Paid' ? 'Paid' : 'Pending',
-    payee: expense.payee || '',
-    referenceNo: expense.referenceNo || '',
-    description: expense.description || '',
-    notes: expense.notes || '',
+    date: expense?.date ? (expense.date.includes('T') ? expense.date.split('T')[0] : expense.date) : new Date().toISOString().split('T')[0],
+    category: expense?.category || 'Office Supplies',
+    categoryId: expense?.categoryId || null,
+    amount: expense?.amount !== undefined ? expense.amount : '',
+    paymentMethod: expense?.paymentMethod || 'Credit Card',
+    paymentMethodId: expense?.paymentMethodId || null,
+    status: expense?.status === 'Paid' ? 'Paid' : 'Pending',
+    payee: expense?.payee || '',
+    referenceNo: expense?.referenceNo || '',
+    description: expense?.description || '',
+    notes: expense?.notes || '',
   });
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (expense) {
+      setFormData({
+        date: expense.date ? (expense.date.includes('T') ? expense.date.split('T')[0] : expense.date) : new Date().toISOString().split('T')[0],
+        category: expense.category || 'Office Supplies',
+        categoryId: expense.categoryId || null,
+        amount: expense.amount !== undefined ? expense.amount : '',
+        paymentMethod: expense.paymentMethod || 'Credit Card',
+        paymentMethodId: expense.paymentMethodId || null,
+        status: expense.status === 'Paid' ? 'Paid' : 'Pending',
+        payee: expense.payee || '',
+        referenceNo: expense.referenceNo || '',
+        description: expense.description || '',
+        notes: expense.notes || '',
+      });
+    }
+  }, [expense]);
 
   useEffect(() => {
     expensesService.getCategories()
@@ -109,6 +125,8 @@ export function EditExpenseModal({ isOpen, onClose, expense, onSave }) {
       setIsSubmitting(false);
     }
   };
+
+  if (!isOpen || !expense) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">

@@ -25,8 +25,6 @@ const STANDARD_ACCOUNTS = [
 ];
 
 export function CreateJournalModal({ isOpen, onClose, onSuccess }) {
-  if (!isOpen) return null;
-
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [narration, setNarration] = useState('');
   const [lines, setLines] = useState([
@@ -133,6 +131,8 @@ export function CreateJournalModal({ isOpen, onClose, onSuccess }) {
       setLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-150">

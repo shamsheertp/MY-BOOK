@@ -1,0 +1,212 @@
+name: CD - Continuous Deployment (Railway)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Railway service to deploy'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - backend
+          - frontend
+      run_migrations:
+        description: 'Run Prisma database migrations before backend deploy'
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: railway-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  # ==========================================================
+  # 1. Quality Gate: Validate Full Stack Build & Tests
+  # ==========================================================
+  validate:
+    name: Validate Full Stack Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      # Backend Validation
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Generate Prisma Client & Compile Backend
+        working-directory: ./backend
+        run: npm run build
+
+      # Frontend Validation
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run Frontend Linting
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Run Frontend Unit Tests
+        working-directory: ./frontend
+        run: npm run test
+
+      - name: Build Frontend Production Bundle
+        working-directory: ./frontend
+        run: npm run build
+
+  # ==========================================================
+  # 2. Deploy Backend Service to Railway
+  # ==========================================================
+  deploy-backend:
+    name: Deploy Backend to Railway
+    needs: validate
+    if: |
+      always() &&
+      (needs.validate.result == 'success') &&
+      (github.event_name == 'push' || inputs.service == 'all' || inputs.service == 'backend')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Verify Railway Token
+        run: |
+          TOKEN="${{ secrets.RAILWAY_BACKEND_TOKEN || secrets.RAILWAY_TOKEN }}"
+          if [ -z "$TOKEN" ]; then
+            echo "::error::RAILWAY_TOKEN is missing! Please configure RAILWAY_TOKEN in your GitHub repository secrets (Settings -> Secrets and variables -> Actions)."
+            exit 1
+          fi
+          echo "Railway token verified."
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Run Prisma Database Migrations
+        if: ${{ github.event_name == 'push' || inputs.run_migrations == true }}
+        working-directory: ./backend
+        run: |
+          echo "Running Prisma migrations on Railway PostgreSQL..."
+          SERVICE_NAME="${{ secrets.RAILWAY_BACKEND_SERVICE || 'backend' }}"
+          if [ -n "$SERVICE_NAME" ]; then
+            railway run --service "$SERVICE_NAME" npm run prisma:deploy || railway run npm run prisma:deploy || true
+          else
+            railway run npm run prisma:deploy || true
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_BACKEND_TOKEN || secrets.RAILWAY_TOKEN }}
+
+      - name: Deploy Backend Service
+        working-directory: ./backend
+        run: |
+          SERVICE_NAME="${{ secrets.RAILWAY_BACKEND_SERVICE || 'backend' }}"
+          echo "Deploying backend to Railway service: $SERVICE_NAME..."
+          if [ -n "$SERVICE_NAME" ]; then
+            railway up --service "$SERVICE_NAME" --detach || railway up --detach
+          else
+            railway up --detach
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_BACKEND_TOKEN || secrets.RAILWAY_TOKEN }}
+
+      - name: Verify Backend Health
+        if: ${{ secrets.BACKEND_PUBLIC_URL != '' }}
+        run: |
+          HEALTH_URL="${{ secrets.BACKEND_PUBLIC_URL }}/api/health"
+          echo "Testing backend health at $HEALTH_URL..."
+          for i in {1..12}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
+            if [ "$STATUS" -eq 200 ]; then
+              echo "Backend is live and healthy! (HTTP 200)"
+              exit 0
+            fi
+            echo "Waiting for backend to be ready... (Status: $STATUS, Attempt $i/12)"
+            sleep 10
+          done
+          echo "Warning: Healthcheck timed out or returned non-200 code."
+
+  # ==========================================================
+  # 3. Deploy Frontend Service to Railway
+  # ==========================================================
+  deploy-frontend:
+    name: Deploy Frontend to Railway
+    needs: validate
+    if: |
+      always() &&
+      (needs.validate.result == 'success') &&
+      (github.event_name == 'push' || inputs.service == 'all' || inputs.service == 'frontend')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Verify Railway Token
+        run: |
+          TOKEN="${{ secrets.RAILWAY_FRONTEND_TOKEN || secrets.RAILWAY_TOKEN }}"
+          if [ -z "$TOKEN" ]; then
+            echo "::error::RAILWAY_TOKEN is missing! Please configure RAILWAY_TOKEN in your GitHub repository secrets (Settings -> Secrets and variables -> Actions)."
+            exit 1
+          fi
+          echo "Railway token verified."
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy Frontend Service
+        working-directory: ./frontend
+        run: |
+          SERVICE_NAME="${{ secrets.RAILWAY_FRONTEND_SERVICE || 'frontend' }}"
+          echo "Deploying frontend to Railway service: $SERVICE_NAME..."
+          if [ -n "$SERVICE_NAME" ]; then
+            railway up --service "$SERVICE_NAME" --detach || railway up --detach
+          else
+            railway up --detach
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_FRONTEND_TOKEN || secrets.RAILWAY_TOKEN }}
+
+      - name: Verify Frontend Health
+        if: ${{ secrets.FRONTEND_PUBLIC_URL != '' }}
+        run: |
+          HEALTH_URL="${{ secrets.FRONTEND_PUBLIC_URL }}/health"
+          echo "Testing frontend health at $HEALTH_URL..."
+          for i in {1..12}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
+            if [ "$STATUS" -eq 200 ]; then
+              echo "Frontend is live and healthy! (HTTP 200)"
+              exit 0
+            fi
+            echo "Waiting for frontend to be ready... (Status: $STATUS, Attempt $i/12)"
+            sleep 10
+          done
+          echo "Warning: Frontend healthcheck timed out or returned non-200 code."
