@@ -24,12 +24,22 @@ RUN npm run build
 # ==========================================
 FROM nginx:alpine AS runner
 
+# Railway dynamically injects $PORT; default to 80 for local docker-compose
+ENV PORT=80
+
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Clean default conf and register template for dynamic PORT substitution
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+
+# Limit worker processes to 2 to prevent excessive process spawning on high-core cloud hosts
+RUN sed -i 's/worker_processes  auto;/worker_processes  2;/' /etc/nginx/nginx.conf
 
 EXPOSE 80
 
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
+# Health check dynamically probes configured $PORT
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/health || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
