@@ -62,8 +62,9 @@ In your Railway project dashboard, make sure you have:
      - `PORT` = `5000`
 3. **Frontend Service**:
    - Set Root Directory to `/frontend` (or uses [`frontend/railway.json`](file:///Users/shamsheer/Documents/GitHub/MY-BOOK/frontend/railway.json)).
-   - Environment variable set in Railway:
-     - `VITE_API_URL` = `https://<your-backend-domain>.up.railway.app/api`
+   - Environment variables set in Railway:
+     - `BACKEND_URL` = `https://<your-backend-domain>.up.railway.app` (or `http://backend.railway.internal:5000` if using Railway private networking)
+     - *(Optional)* `VITE_API_URL` = `https://<your-backend-domain>.up.railway.app/api` (automatically sanitized to `BACKEND_URL`)
 
 ---
 

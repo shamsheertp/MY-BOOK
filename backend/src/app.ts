@@ -36,7 +36,11 @@ app.use(
       // Allow configured frontend client origin or local dev
       if (
         allowedOrigins.includes(origin) ||
+        allowedOrigins.includes('*') ||
         origin.startsWith('http://localhost:') ||
+        origin.endsWith('.railway.app') ||
+        origin.endsWith('.up.railway.app') ||
+        origin.endsWith('.vercel.app') ||
         config.nodeEnv === 'development'
       ) {
         return callback(null, true);
