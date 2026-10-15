@@ -98,7 +98,12 @@ model Contact {
 
   sales       Sale[]
   purchases   Purchase[]
+  expenses    Expense[]
 
+  @@index([contactName])
+  @@index([companyName])
+  @@index([phone])
+  @@index([email])
   @@map("contacts")
 }
 
@@ -119,6 +124,8 @@ model Product {
   saleItems     SaleItem[]
   purchaseItems PurchaseItem[]
 
+  @@index([name])
+  @@index([category])
   @@map("products")
 }
 
@@ -159,6 +166,10 @@ model Sale {
   items           SaleItem[]
   payments        SalePayment[]
 
+  @@index([status])
+  @@index([date])
+  @@index([customerId])
+  @@index([createdAt])
   @@map("sales")
 }
 
@@ -174,6 +185,8 @@ model SaleItem {
   sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
+  @@index([saleId])
+  @@index([productId])
   @@map("sale_items")
 }
 
@@ -192,6 +205,8 @@ model SalePayment {
 
   sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
+  @@index([saleId])
+  @@index([date])
   @@map("sale_payments")
 }
 
@@ -234,6 +249,10 @@ model Purchase {
   bills                PurchaseBill[]
   payments             PurchasePayment[]
 
+  @@index([status])
+  @@index([date])
+  @@index([supplierId])
+  @@index([createdAt])
   @@map("purchases")
 }
 
@@ -251,6 +270,8 @@ model PurchaseItem {
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
   product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
+  @@index([purchaseId])
+  @@index([productId])
   @@map("purchase_items")
 }
 
@@ -267,6 +288,7 @@ model PurchaseReceipt {
 
   purchase      Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
+  @@index([purchaseId])
   @@map("purchase_receipts")
 }
 
@@ -286,6 +308,8 @@ model PurchaseBill {
 
   purchase   Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
+  @@index([purchaseId])
+  @@index([status])
   @@map("purchase_bills")
 }
 
@@ -305,7 +329,127 @@ model PurchasePayment {
 
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
+  @@index([purchaseId])
+  @@index([billId])
+  @@index([date])
   @@map("purchase_payments")
+}
+
+enum ExpenseStatus {
+  PAID
+  PENDING
+  CANCELLED
+  VOID
+}
+
+model ExpenseCategory {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  color       String?   @default("#6366f1")
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  expenses    Expense[]
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id            String           @id @default(uuid())
+  ref           String           @unique
+  date          DateTime         @default(now())
+  category      String
+  categoryId    String?
+  amount        Decimal          @default(0.00) @db.Decimal(12, 2)
+  tax           Decimal          @default(0.00) @db.Decimal(12, 2)
+  paymentMethod   String           @default("Credit Card")
+  paymentMethodId String?
+  status          ExpenseStatus    @default(PAID)
+  description     String?          @db.Text
+  payee           String?
+  contactId       String?
+  referenceNo     String?
+  receiptImage    String?          @db.Text
+  notes           String?          @db.Text
+  voided          Boolean          @default(false)
+  voidReason      String?          @db.Text
+  voidedAt        DateTime?
+  createdById     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  contact          Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  expenseCategory  ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  paymentMethodRel PaymentMethod?   @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+  @@index([category])
+  @@index([status])
+  @@index([voided])
+  @@index([contactId])
+  @@index([createdAt])
+  @@map("expenses")
+}
+
+model PaymentMethod {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  code        String?   @unique
+  type        String    @default("BANK") // CASH, BANK, CARD, UPI, CHEQUE, OTHER
+  description String?
+  isDefault   Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  expenses    Expense[]
+
+  @@map("payment_methods")
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  VOID
+}
+
+model JournalEntry {
+  id          String        @id @default(uuid())
+  ref         String        @unique
+  date        DateTime      @default(now())
+  narration   String?       @db.Text
+  status      JournalStatus @default(POSTED)
+  totalDebit  Decimal       @default(0.00) @db.Decimal(12, 2)
+  totalCredit Decimal       @default(0.00) @db.Decimal(12, 2)
+  createdById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  lines       JournalLine[]
+
+  @@index([date])
+  @@index([status])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id          String       @id @default(uuid())
+  journalId   String
+  accountCode String
+  accountName String
+  description String?      @db.Text
+  debit       Decimal      @default(0.00) @db.Decimal(12, 2)
+  credit      Decimal      @default(0.00) @db.Decimal(12, 2)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  journal     JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
+
+  @@index([accountCode])
+  @@index([journalId])
+  @@map("journal_lines")
 }
 
 

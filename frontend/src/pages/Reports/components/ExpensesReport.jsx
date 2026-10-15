@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Filter, ChevronLeft, ChevronRight, TrendingDown } from 'lucide-react';
 import expensesData from '../../../db/expenses.json';
+import { expensesService } from '../../../services/api';
 
 export function ExpensesReport() {
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState('month'); 
+  const [expenses, setExpenses] = useState(expensesData);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -15,34 +17,46 @@ export function ExpensesReport() {
   const colors = ['#f43f5e', '#ef4444', '#f97316', '#f59e0b', '#8b5cf6', '#6366f1'];
 
   useEffect(() => {
+    let isMounted = true;
     setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
+    expensesService.list({ limit: 100 })
+      .then(res => {
+        if (isMounted && res?.data?.expenses && Array.isArray(res.data.expenses)) {
+          setExpenses(res.data.expenses);
+        }
+      })
+      .catch(err => {
+        console.warn('Expenses report using local data:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
+    return () => { isMounted = false; };
   }, [dateRange]);
 
   const chartData = useMemo(() => {
-    const aggregated = expensesData.reduce((acc, expense) => {
-      if (!acc[expense.category]) acc[expense.category] = 0;
-      acc[expense.category] += expense.amount;
+    const aggregated = expenses.reduce((acc, expense) => {
+      const cat = expense.category || 'General';
+      if (!acc[cat]) acc[cat] = 0;
+      acc[cat] += Number(expense.amount || 0);
       return acc;
     }, {});
 
     return Object.keys(aggregated).map(category => ({
       name: category,
-      amount: aggregated[category]
+      amount: parseFloat(aggregated[category].toFixed(2))
     })).sort((a, b) => b.amount - a.amount);
-  }, [dateRange]);
+  }, [expenses]);
 
-  const totalPages = Math.ceil(expensesData.length / itemsPerPage);
+  const totalPages = Math.ceil(expenses.length / itemsPerPage);
   
   const paginatedData = useMemo(() => {
-    return expensesData.slice(
+    return expenses.slice(
       (currentPage - 1) * itemsPerPage,
       currentPage * itemsPerPage
     );
-  }, [currentPage, itemsPerPage]);
+  }, [expenses, currentPage, itemsPerPage]);
 
   if (isLoading) {
     return (
@@ -84,7 +98,7 @@ export function ExpensesReport() {
               <Tooltip 
                 contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                 cursor={{fill: '#f8fafc'}}
-                formatter={(value) => [`₹${value.toFixed(2)}`, 'Total Amount']}
+                formatter={(value) => [`₹${Number(value).toFixed(2)}`, 'Total Amount']}
               />
               <Bar dataKey="amount" radius={[8, 8, 0, 0]} maxBarSize={60}>
                 {chartData.map((entry, index) => (
@@ -116,25 +130,28 @@ export function ExpensesReport() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {paginatedData.map((expense) => (
-                <tr key={expense.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-semibold text-sm text-slate-800">{new Date(expense.date).toLocaleDateString()}</div>
-                    <div className="text-[11px] text-slate-400 font-medium mt-0.5">{expense.id}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-slate-700">{expense.description}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">
-                      {expense.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm font-bold text-rose-600">
-                    ₹{expense.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              ))}
+              {paginatedData.map((expense) => {
+                const amt = Number(expense.amount || 0);
+                return (
+                  <tr key={expense.id || expense.ref} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-sm text-slate-800">{new Date(expense.date).toLocaleDateString()}</div>
+                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">{expense.ref || expense.id}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-slate-700">{expense.description || <span className="text-slate-400 italic">No description</span>}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">
+                        {expense.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm font-bold text-rose-600">
+                      ₹{amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -142,7 +159,7 @@ export function ExpensesReport() {
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
           <span className="text-sm font-medium text-slate-500">
-            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, expensesData.length)} of {expensesData.length} records
+            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, expenses.length)} of {expenses.length} records
           </span>
           <div className="flex items-center gap-2">
             <button 
@@ -153,11 +170,11 @@ export function ExpensesReport() {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span className="text-sm font-semibold text-slate-700 min-w-[4rem] text-center">
-              Page {currentPage} of {totalPages}
+              Page {currentPage} of {totalPages || 1}
             </span>
             <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages || 1, p + 1))}
+              disabled={currentPage === totalPages || totalPages <= 1}
               className="p-2 border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white shadow-sm"
             >
               <ChevronRight className="w-4 h-4" />

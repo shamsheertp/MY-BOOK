@@ -15,6 +15,22 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthUserPayload;
 }
 
+interface CachedUser {
+  user: { id: string; email: string; role: Role; status: string };
+  expiresAt: number;
+}
+
+const authenticatedUserCache = new Map<string, CachedUser>();
+const USER_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+export function invalidateAuthUserCache(userId?: string) {
+  if (userId) {
+    authenticatedUserCache.delete(userId);
+  } else {
+    authenticatedUserCache.clear();
+  }
+}
+
 export const authenticate = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -51,10 +67,24 @@ export const authenticate = async (
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, email: true, role: true, status: true },
-    });
+    let user: { id: string; email: string; role: Role; status: string } | null = null;
+    const cached = authenticatedUserCache.get(decoded.id);
+
+    if (cached && Date.now() < cached.expiresAt) {
+      user = cached.user;
+    } else {
+      user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        select: { id: true, email: true, role: true, status: true },
+      });
+
+      if (user) {
+        authenticatedUserCache.set(decoded.id, {
+          user,
+          expiresAt: Date.now() + USER_CACHE_TTL_MS,
+        });
+      }
+    }
 
     if (!user) {
       res.status(401).json({

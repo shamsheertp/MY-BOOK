@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ReportHeader } from './components/ReportHeader';
 import { SalesReport } from './components/SalesReport';
 import { ExpensesReport } from './components/ExpensesReport';
+import { ProfitAndLossReport } from './components/ProfitAndLossReport';
 import { BarChart3, TrendingDown, DollarSign } from 'lucide-react';
 
 export default function Reports() {
@@ -41,12 +42,7 @@ export default function Reports() {
       <div className="report-content-area">
         {activeTab === 'sales' && <SalesReport />}
         {activeTab === 'expenses' && <ExpensesReport />}
-        {activeTab === 'profit' && (
-          <div className="glass-card bg-white rounded-3xl p-12 text-center border border-slate-100">
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Profit & Loss Report</h3>
-            <p className="text-slate-500">This report combines your Sales and Expenses to show net profit margins. (Coming Soon)</p>
-          </div>
-        )}
+        {activeTab === 'profit' && <ProfitAndLossReport />}
       </div>
     </div>
   );

@@ -1,26 +1,44 @@
 import { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Calendar, Filter, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
+import { Calendar, Filter, ChevronLeft, ChevronRight, BarChart3, RefreshCw } from 'lucide-react';
 import salesData from '../../../db/sales.json';
+import { salesService } from '../../../services/api';
 
 export function SalesReport() {
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState('month'); // 'week', 'month', 'year'
+  const [sales, setSales] = useState(salesData);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  useEffect(() => {
+  const fetchSales = () => {
     setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
+    let isMounted = true;
+    salesService.list({ limit: 100 })
+      .then(res => {
+        const list = res?.data || res?.sales;
+        if (isMounted && Array.isArray(list) && list.length > 0) {
+          setSales(list);
+        }
+      })
+      .catch(err => {
+        console.warn('Sales report using local data fallback:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => { isMounted = false; };
+  };
+
+  useEffect(() => {
+    const cleanup = fetchSales();
+    return cleanup;
   }, [dateRange]);
 
   const chartData = useMemo(() => {
-    const aggregated = salesData.reduce((acc, sale) => {
+    const aggregated = sales.reduce((acc, sale) => {
       const dateObj = new Date(sale.date);
       const dateStr = !isNaN(dateObj) ? dateObj.toISOString().split('T')[0] : sale.date;
       if (!acc[dateStr]) acc[dateStr] = 0;
@@ -32,16 +50,16 @@ export function SalesReport() {
       date,
       amount: aggregated[date]
     })).sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [salesData, dateRange]);
+  }, [sales, dateRange]);
 
-  const totalPages = Math.ceil(salesData.length / itemsPerPage);
+  const totalPages = Math.ceil(sales.length / itemsPerPage) || 1;
   
   const paginatedData = useMemo(() => {
-    return salesData.slice(
+    return sales.slice(
       (currentPage - 1) * itemsPerPage,
       currentPage * itemsPerPage
     );
-  }, [salesData, currentPage, itemsPerPage]);
+  }, [sales, currentPage, itemsPerPage]);
 
   if (isLoading) {
     return (
@@ -151,7 +169,7 @@ export function SalesReport() {
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
           <span className="text-sm font-medium text-slate-500">
-            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, salesData.length)} of {salesData.length} records
+            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, sales.length)} of {sales.length} records
           </span>
           <div className="flex items-center gap-2">
             <button 

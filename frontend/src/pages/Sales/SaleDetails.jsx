@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { salesService } from '../../services/api';
+import { salesService, uploadService } from '../../services/api';
 
 import { SaleDetailsHeader } from './components/SaleDetailsHeader';
 import { PaymentSummary } from './components/PaymentSummary';
@@ -46,6 +46,7 @@ export default function SaleDetails() {
   // Void Invoice modal state
   const [isVoidInvoiceModalOpen, setIsVoidInvoiceModalOpen] = useState(false);
   const [isSubmittingVoid, setIsSubmittingVoid] = useState(false);
+  const [uploadingPaymentId, setUploadingPaymentId] = useState(null);
 
   const fetchSaleDetails = useCallback(async () => {
     setIsLoading(true);
@@ -140,15 +141,24 @@ export default function SaleDetails() {
     setIsProofModalOpen(true);
   };
 
-  const handleUploadProof = (paymentId, file) => {
-    // Local preview attachment
-    const previewUrl = URL.createObjectURL(file);
-    setSale(prev => ({
-      ...prev,
-      payments: prev.payments.map(p => 
-        (p.id === paymentId) ? { ...p, image: file.name, imagePreview: previewUrl } : p
-      ),
-    }));
+  const handleUploadProof = async (paymentId, file) => {
+    if (!file) return;
+    setUploadingPaymentId(paymentId);
+    try {
+      const res = await salesService.uploadPaymentProof(sale.id, paymentId, file);
+      const uploadedUrl = res.url || res.data?.image;
+
+      setSale(prev => ({
+        ...prev,
+        payments: (prev.payments || []).map(p => 
+          (p.id === paymentId || p.ref === paymentId) ? { ...p, image: uploadedUrl } : p
+        ),
+      }));
+    } catch (err) {
+      alert(err.message || 'Failed to upload proof document to storage');
+    } finally {
+      setUploadingPaymentId(null);
+    }
   };
 
   const handleVoidPayment = (paymentId) => {
@@ -182,11 +192,22 @@ export default function SaleDetails() {
 
     setIsSubmittingPayment(true);
     try {
+      let uploadedProofUrl = null;
+      if (paymentForm.image) {
+        try {
+          const upRes = await uploadService.uploadFile(paymentForm.image, 'payments');
+          uploadedProofUrl = upRes?.data?.url || null;
+        } catch (upErr) {
+          console.warn('Payment proof upload warning:', upErr);
+        }
+      }
+
       const response = await salesService.recordPayment(sale.id, {
         amount: amt,
         date: paymentForm.date,
         method: paymentForm.method,
         ref: paymentForm.ref || undefined,
+        image: uploadedProofUrl,
         notes: paymentForm.image ? `Proof: ${paymentForm.image.name}` : undefined,
       });
 
@@ -269,6 +290,7 @@ export default function SaleDetails() {
           onViewReceipt={handleViewReceipt}
           onViewProof={handleViewProof}
           onUploadProof={handleUploadProof}
+          uploadingPaymentId={uploadingPaymentId}
         />
 
         <InvoiceDocument 

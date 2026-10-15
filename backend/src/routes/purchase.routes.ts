@@ -21,16 +21,18 @@ import { authenticate, authorize } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { Role } from '@prisma/client';
 
+import { cacheResponse } from '../utils/cache.js';
+
 const router = Router();
 
 // Protect all purchase routes with authentication
 router.use(authenticate);
 
-// Get all purchase orders (All authenticated users can view)
-router.get('/', getPurchases);
+// Get all purchase orders (All authenticated users can view, cached with 45s TTL)
+router.get('/', cacheResponse('purchases', 45000), getPurchases);
 
 // Get single purchase order by ID or reference
-router.get('/:id', getPurchaseById);
+router.get('/:id', cacheResponse('purchases', 45000), getPurchaseById);
 
 // Create new purchase order (Admin, Manager, Accountant)
 router.post(

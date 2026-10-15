@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { prisma } from '../config/db.js';
+import { prisma, DB_TX_OPTIONS } from '../config/db.js';
 import { Prisma, SaleStatus } from '@prisma/client';
+import { serverCache } from '../utils/cache.js';
 
 export const createSaleItemSchema = z.object({
   productId: z.string().optional().nullable(),
@@ -44,29 +45,27 @@ export const recordPaymentSchema = z.object({
  */
 async function generateNextSaleRef(): Promise<string> {
   const currentYear = new Date().getFullYear();
-  const sales = await prisma.sale.findMany({
+  const lastSale = await prisma.sale.findFirst({
     where: {
       ref: {
         startsWith: `SALE-${currentYear}`,
       },
     },
+    orderBy: { ref: 'desc' },
     select: { ref: true },
   });
 
-  let maxNum = 20; // default baseline
-  for (const s of sales) {
-    if (s.ref) {
-      const match = s.ref.match(new RegExp(`SALE-${currentYear}(\\d+)`));
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNum) {
-          maxNum = num;
-        }
+  let nextNum = 21;
+  if (lastSale?.ref) {
+    const match = lastSale.ref.match(new RegExp(`SALE-${currentYear}(\\d+)`));
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num)) {
+        nextNum = num + 1;
       }
     }
   }
 
-  const nextNum = maxNum + 1;
   return `SALE-${currentYear}${nextNum.toString().padStart(3, '0')}`;
 }
 
@@ -189,9 +188,6 @@ export async function getSales(req: Request, res: Response, next: NextFunction) 
         where,
         include: {
           items: true,
-          payments: {
-            orderBy: { date: 'desc' },
-          },
         },
         orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
@@ -317,26 +313,28 @@ export async function createSale(req: Request, res: Response, next: NextFunction
       ref = await generateNextSaleRef();
     } else {
       ref = ref.trim();
-      const existing = await prisma.sale.findUnique({ where: { ref } });
-      if (existing) {
-        res.status(400).json({
-          success: false,
-          message: `Invoice reference "${ref}" already exists`,
-        });
-        return;
-      }
     }
 
-    // If customerId is provided, enrich customer details from DB if not passed
-    if (customerId) {
-      const contact = await prisma.contact.findUnique({ where: { id: customerId } });
-      if (contact) {
-        customerName = customerName || contact.contactName;
-        customerCompany = customerCompany || contact.companyName || '';
-        customerEmail = customerEmail || contact.email || '';
-        customerPhone = customerPhone || contact.phone || '';
-        customerAddress = customerAddress || contact.address || '';
-      }
+    // Parallelize reference existence check and customer enrichment lookup
+    const [existing, contact] = await Promise.all([
+      prisma.sale.findUnique({ where: { ref }, select: { id: true } }),
+      customerId ? prisma.contact.findUnique({ where: { id: customerId } }) : Promise.resolve(null),
+    ]);
+
+    if (existing) {
+      res.status(400).json({
+        success: false,
+        message: `Invoice reference "${ref}" already exists`,
+      });
+      return;
+    }
+
+    if (contact) {
+      customerName = customerName || contact.contactName;
+      customerCompany = customerCompany || contact.companyName || '';
+      customerEmail = customerEmail || contact.email || '';
+      customerPhone = customerPhone || contact.phone || '';
+      customerAddress = customerAddress || contact.address || '';
     }
 
     // Calculate line items totals
@@ -362,7 +360,7 @@ export async function createSale(req: Request, res: Response, next: NextFunction
     const totalAmount = Number((taxableAmount + taxAmount).toFixed(2));
     const balanceAmount = totalAmount;
 
-    // Use transaction to create sale, reduce product stock, and update customer receivables
+    // Use transaction to create sale, reduce product stock, and update customer receivables concurrently
     const result = await prisma.$transaction(async (tx) => {
       const sale = await tx.sale.create({
         data: {
@@ -394,38 +392,39 @@ export async function createSale(req: Request, res: Response, next: NextFunction
         },
       });
 
-      // Deduct inventory stock if not a draft invoice
+      // Deduct inventory stock & update customer receivables in parallel
       if (status !== SaleStatus.DRAFT) {
-        for (const item of lineItemsData) {
-          if (item.productId) {
-            await tx.product.update({
+        const productUpdates = lineItemsData
+          .filter((item: any) => Boolean(item.productId))
+          .map((item: any) =>
+            tx.product.update({
               where: { id: item.productId },
               data: {
                 stockKg: {
                   decrement: item.quantityKg,
                 },
               },
-            }).catch(() => {
-              // Ignore if product was deleted
-            });
-          }
-        }
+            }).catch(() => {})
+          );
 
-        // Add to customer receivables if linked
-        if (customerId) {
-          await tx.contact.update({
-            where: { id: customerId },
-            data: {
-              receivables: {
-                increment: totalAmount,
+        const contactUpdate = customerId
+          ? tx.contact.update({
+              where: { id: customerId },
+              data: {
+                receivables: {
+                  increment: totalAmount,
+                },
               },
-            },
-          }).catch(() => {});
-        }
+            }).catch(() => {})
+          : Promise.resolve();
+
+        await Promise.all([...productUpdates, contactUpdate]);
       }
 
       return sale;
-    });
+    }, DB_TX_OPTIONS);
+
+    serverCache.invalidate(['sales', 'reports', 'ledgers', 'contacts']);
 
     res.status(201).json({
       success: true,
@@ -484,61 +483,65 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
       ref = await generateNextPaymentRef();
     }
 
+    // Pre-calculate updated sale financials
+    const newReceived = Number(sale.received) + paymentAmount;
+    const newBalance = Math.max(0, Number(sale.total) - newReceived);
+
+    let newStatus = sale.status;
+    if (newBalance <= 0) {
+      newStatus = SaleStatus.PAID;
+    } else if (newReceived > 0) {
+      newStatus = SaleStatus.PARTIAL;
+    }
+
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Create payment record
-      const payment = await tx.salePayment.create({
-        data: {
-          saleId: sale.id,
-          ref: ref.trim(),
-          date: date ? new Date(date) : new Date(),
-          amount: paymentAmount,
-          method: method?.trim() || 'Bank Transfer',
-          notes: notes?.trim() || null,
-          image: image?.trim() || null,
-        },
-      });
-
-      // 2. Calculate new received & balance
-      const newReceived = Number(sale.received) + paymentAmount;
-      const newBalance = Math.max(0, Number(sale.total) - newReceived);
-
-      let newStatus = sale.status;
-      if (newBalance <= 0) {
-        newStatus = SaleStatus.PAID;
-      } else if (newReceived > 0) {
-        newStatus = SaleStatus.PARTIAL;
-      }
-
-      // 3. Update sale
-      const updatedSale = await tx.sale.update({
-        where: { id: sale.id },
-        data: {
-          received: newReceived,
-          balance: newBalance,
-          status: newStatus,
-        },
-        include: {
-          items: true,
-          payments: {
-            orderBy: { date: 'desc' },
-          },
-        },
-      });
-
-      // 4. Update customer receivables if linked
-      if (sale.customerId) {
-        await tx.contact.update({
-          where: { id: sale.customerId },
+      // Execute payment creation, invoice update, and customer receivable decrement concurrently
+      const [payment, updatedSale] = await Promise.all([
+        tx.salePayment.create({
           data: {
-            receivables: {
-              decrement: paymentAmount,
+            saleId: sale.id,
+            ref: ref.trim(),
+            date: date ? new Date(date) : new Date(),
+            amount: paymentAmount,
+            method: method?.trim() || 'Bank Transfer',
+            notes: notes?.trim() || null,
+            image: image?.trim() || null,
+          },
+        }),
+        tx.sale.update({
+          where: { id: sale.id },
+          data: {
+            received: newReceived,
+            balance: newBalance,
+            status: newStatus,
+          },
+          include: {
+            items: true,
+            payments: {
+              orderBy: { date: 'desc' },
             },
           },
-        }).catch(() => {});
-      }
+        }),
+        ...(sale.customerId
+          ? [
+              tx.contact
+                .update({
+                  where: { id: sale.customerId },
+                  data: {
+                    receivables: {
+                      decrement: paymentAmount,
+                    },
+                  },
+                })
+                .catch(() => null),
+            ]
+          : []),
+      ]);
 
       return { payment, sale: updatedSale };
-    });
+    }, DB_TX_OPTIONS);
+
+    serverCache.invalidate(['sales', 'reports', 'ledgers', 'contacts']);
 
     res.json({
       success: true,
@@ -582,53 +585,57 @@ export async function voidPayment(req: Request, res: Response, next: NextFunctio
     }
 
     const voidedAmount = Number(payment.amount);
+    const newReceived = Math.max(0, Number(sale.received) - voidedAmount);
+    const newBalance = Math.max(0, Number(sale.total) - newReceived);
+
+    let newStatus = sale.status;
+    if (newBalance <= 0) {
+      newStatus = SaleStatus.PAID;
+    } else if (newReceived > 0) {
+      newStatus = SaleStatus.PARTIAL;
+    } else {
+      newStatus = SaleStatus.UNPAID;
+    }
 
     const result = await prisma.$transaction(async (tx) => {
-      // Mark payment voided
-      await tx.salePayment.update({
-        where: { id: payment.id },
-        data: { voided: true },
-      });
-
-      const newReceived = Math.max(0, Number(sale.received) - voidedAmount);
-      const newBalance = Math.max(0, Number(sale.total) - newReceived);
-
-      let newStatus = sale.status;
-      if (newBalance <= 0) {
-        newStatus = SaleStatus.PAID;
-      } else if (newReceived > 0) {
-        newStatus = SaleStatus.PARTIAL;
-      } else {
-        newStatus = SaleStatus.UNPAID;
-      }
-
-      const updatedSale = await tx.sale.update({
-        where: { id: sale.id },
-        data: {
-          received: newReceived,
-          balance: newBalance,
-          status: newStatus,
-        },
-        include: {
-          items: true,
-          payments: { orderBy: { date: 'desc' } },
-        },
-      });
-
-      // Restore customer receivables
-      if (sale.customerId) {
-        await tx.contact.update({
-          where: { id: sale.customerId },
+      // Execute payment voiding, sale balance update, and customer receivable restoration concurrently
+      const [, updatedSale] = await Promise.all([
+        tx.salePayment.update({
+          where: { id: payment.id },
+          data: { voided: true },
+        }),
+        tx.sale.update({
+          where: { id: sale.id },
           data: {
-            receivables: {
-              increment: voidedAmount,
-            },
+            received: newReceived,
+            balance: newBalance,
+            status: newStatus,
           },
-        }).catch(() => {});
-      }
+          include: {
+            items: true,
+            payments: { orderBy: { date: 'desc' } },
+          },
+        }),
+        ...(sale.customerId
+          ? [
+              tx.contact
+                .update({
+                  where: { id: sale.customerId },
+                  data: {
+                    receivables: {
+                      increment: voidedAmount,
+                    },
+                  },
+                })
+                .catch(() => null),
+            ]
+          : []),
+      ]);
 
       return updatedSale;
-    });
+    }, DB_TX_OPTIONS);
+
+    serverCache.invalidate(['sales', 'reports', 'ledgers', 'contacts']);
 
     res.json({
       success: true,
@@ -674,7 +681,9 @@ export async function deleteSale(req: Request, res: Response, next: NextFunction
       await tx.sale.delete({
         where: { id: sale.id },
       });
-    });
+    }, DB_TX_OPTIONS);
+
+    serverCache.invalidate(['sales', 'reports', 'ledgers', 'contacts']);
 
     res.json({
       success: true,
@@ -718,36 +727,37 @@ export async function voidSale(req: Request, res: Response, next: NextFunction) 
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Restore product inventory stock (if not draft)
+      // 1. Restore product inventory stock (if not draft) concurrently
       if (sale.status !== SaleStatus.DRAFT) {
-        for (const item of sale.items) {
-          if (item.productId && Number(item.quantityKg) > 0) {
-            await tx.product.update({
-              where: { id: item.productId },
+        const itemRestores = sale.items
+          .filter(item => item.productId && Number(item.quantityKg) > 0)
+          .map(item =>
+            tx.product.update({
+              where: { id: item.productId! },
               data: {
                 stockKg: {
                   increment: Number(item.quantityKg),
                 },
               },
-            }).catch(() => {});
-          }
-        }
+            }).catch(() => {})
+          );
 
-        // 2. Adjust customer receivables: deduct the remaining unpaid balance
         const unpaidBalance = Number(sale.balance);
-        if (sale.customerId && unpaidBalance > 0) {
-          await tx.contact.update({
-            where: { id: sale.customerId },
-            data: {
-              receivables: {
-                decrement: unpaidBalance,
+        const contactAdjustment = (sale.customerId && unpaidBalance > 0)
+          ? tx.contact.update({
+              where: { id: sale.customerId },
+              data: {
+                receivables: {
+                  decrement: unpaidBalance,
+                },
               },
-            },
-          }).catch(() => {});
-        }
+            }).catch(() => {})
+          : Promise.resolve();
+
+        await Promise.all([...itemRestores, contactAdjustment]);
       }
 
-      // 3. Mark all payments recorded for this invoice as voided
+      // 2. Mark all payments recorded for this invoice as voided
       if (sale.payments.length > 0) {
         await tx.salePayment.updateMany({
           where: { saleId: sale.id },
@@ -755,7 +765,7 @@ export async function voidSale(req: Request, res: Response, next: NextFunction) 
         });
       }
 
-      // 4. Update the invoice status to VOID
+      // 3. Update the invoice status to VOID
       const dateStr = new Date().toISOString().split('T')[0];
       const voidNote = `[VOIDED on ${dateStr}${reason ? `: ${reason}` : ''}]`;
       const updatedNotes = sale.notes ? `${sale.notes}\n${voidNote}` : voidNote;
@@ -774,7 +784,9 @@ export async function voidSale(req: Request, res: Response, next: NextFunction) 
       });
 
       return updatedSale;
-    });
+    }, DB_TX_OPTIONS);
+
+    serverCache.invalidate(['sales', 'reports', 'ledgers', 'contacts']);
 
     res.json({
       success: true,
@@ -785,4 +797,53 @@ export async function voidSale(req: Request, res: Response, next: NextFunction) 
     next(error);
   }
 }
+
+/**
+ * PATCH /api/sales/:id/payments/:paymentId/proof
+ * Attach or update payment proof document URL (stored on Cloudflare R2)
+ */
+export async function updatePaymentProof(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    const paymentId = req.params.paymentId as string;
+    const { image } = req.body;
+
+    if (!image || typeof image !== 'string') {
+      res.status(400).json({ success: false, message: 'Proof document URL is required' });
+      return;
+    }
+
+    const sale = await prisma.sale.findFirst({
+      where: { OR: [{ id }, { ref: id }] },
+      include: { payments: true },
+    });
+
+    if (!sale) {
+      res.status(404).json({ success: false, message: 'Sale invoice not found' });
+      return;
+    }
+
+    const payment = sale.payments.find(p => p.id === paymentId || p.ref === paymentId);
+    if (!payment) {
+      res.status(404).json({ success: false, message: 'Payment record not found' });
+      return;
+    }
+
+    const updatedPayment = await prisma.salePayment.update({
+      where: { id: payment.id },
+      data: { image: image.trim() },
+    });
+
+    serverCache.invalidate(['sales']);
+
+    res.json({
+      success: true,
+      message: 'Payment proof attached successfully',
+      data: updatedPayment,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 

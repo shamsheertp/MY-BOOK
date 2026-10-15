@@ -1,22 +1,47 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
 import { config } from './config/env.js';
 import apiRoutes from './routes/index.js';
 import { notFoundHandler, errorHandler } from './middlewares/error.middleware.js';
 
 export const app = express();
 
-// Middlewares
+// Trust reverse proxy headers (e.g. Railway, Cloudflare, Nginx, Render)
+app.set('trust proxy', 1);
+
+// Production Security Headers
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// Gzip / Brotli response compression
+app.use(compression());
+
+// Production CORS Configuration
+const allowedOrigins = config.clientUrl
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, or Postman)
+      // Allow requests with no origin (e.g. mobile apps, curl, or Postman)
       if (!origin) return callback(null, true);
       // Allow configured frontend client origin or local dev
-      if (origin === config.clientUrl || origin.startsWith('http://localhost:')) {
+      if (
+        allowedOrigins.includes(origin) ||
+        origin.startsWith('http://localhost:') ||
+        config.nodeEnv === 'development'
+      ) {
         return callback(null, true);
       }
-      return callback(null, true); // Permissive for initial dev / api clients
+      return callback(new Error(`CORS policy: origin ${origin} not allowed`));
     },
     credentials: true,
   })
@@ -24,6 +49,9 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve local upload files statically as fallback
+app.use('/uploads', express.static('uploads'));
 
 // Request logging middleware
 app.use((req, _res, next) => {

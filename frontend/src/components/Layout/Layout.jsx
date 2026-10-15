@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Truck, Package,
   ShoppingCart, Receipt, CreditCard, BookOpen, Book,
   FileText, Settings, Menu, X, Bell, User as UserIcon, Search, Building2, MessageCircle,
-  Shield, LogOut, LogIn
+  Shield, LogOut, LogIn, Wallet
 } from 'lucide-react';
 import { SidebarItem, SidebarSection } from './SidebarItem';
 import { GlobalSearch } from './GlobalSearch';
@@ -53,6 +53,7 @@ export default function Layout({ children }) {
     { type: 'link', to: '/reports', icon: FileText, label: 'Reports', isChild: true },
     { type: 'section', title: 'Settings' },
     { type: 'link', to: '/settings/users', icon: Shield, label: 'User Management', isChild: true },
+    { type: 'link', to: '/settings/finance', icon: Wallet, label: 'Payment & Categories', isChild: true },
     { type: 'link', to: '/settings/company', icon: Building2, label: 'Company Profile', isChild: true },
     { type: 'link', to: '/settings/connect/whatsapp', icon: MessageCircle, label: 'WhatsApp Connect', isChild: true },
   ];

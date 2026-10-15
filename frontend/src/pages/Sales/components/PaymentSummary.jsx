@@ -1,7 +1,7 @@
-import { Ban, Share2 } from 'lucide-react';
+import { Ban, Share2, Eye, Upload, Loader2, FileCheck } from 'lucide-react';
 import { StatusBadge } from '../../Dashboard/components/StatusBadge';
 
-export function PaymentSummary({ sale, paymentsList, balance, received, total, formatCurrency, onVoidPayment, onViewReceipt, onViewProof, onUploadProof }) {
+export function PaymentSummary({ sale, paymentsList, balance, received, total, formatCurrency, onVoidPayment, onViewReceipt, onViewProof, onUploadProof, uploadingPaymentId }) {
   return (
     <div className="glass-card bg-white/95 rounded-xl shadow-md overflow-hidden border border-white print:hidden mb-6">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
@@ -27,33 +27,49 @@ export function PaymentSummary({ sale, paymentsList, balance, received, total, f
                     <tr key={idx} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors ${pay.voided ? 'opacity-60' : ''}`}>
                       <td className="py-2 pr-4 font-medium">{pay.date}</td>
                       <td className="py-2 px-4 text-slate-500">
-                        {pay.method} <span className="text-xs ml-1">({pay.ref})</span>
+                        {pay.method} <span className="text-xs ml-1 font-mono">({pay.ref})</span>
                       </td>
                       <td className="py-2 px-4 text-center">
-                        <div className="flex justify-center space-x-2">
+                        <div className="flex items-center justify-center space-x-2">
                           <button 
                             disabled={pay.voided} 
                             onClick={() => onViewReceipt(pay)}
-                            className="text-indigo-600 hover:text-indigo-800 text-[10px] font-bold uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                            className="text-indigo-600 hover:text-indigo-800 text-[10px] font-bold uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                            title="View Generated Receipt"
                           >
                             Receipt
                           </button>
+
                           {(pay.image || pay.imagePreview) ? (
                             <button 
                               disabled={pay.voided} 
                               onClick={() => onViewProof(pay)}
-                              className="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                              className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-900 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 hover:bg-emerald-100/90 border border-emerald-200/80 px-2.5 py-1.5 rounded-lg transition-all shadow-xs disabled:opacity-50 group cursor-pointer"
+                              title="View Uploaded Document / Proof"
                             >
-                              Proof
+                              <FileCheck className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                              <span>View Proof</span>
                             </button>
                           ) : (
-                            <label className={`text-slate-500 hover:text-slate-700 text-[10px] font-bold uppercase tracking-wider bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg transition-colors ${pay.voided ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                              Upload
+                            <label className={`inline-flex items-center gap-1 text-slate-600 hover:text-indigo-600 text-[10px] font-bold uppercase tracking-wider bg-slate-50 hover:bg-indigo-50/80 border border-slate-200 hover:border-indigo-300 px-2.5 py-1.5 rounded-lg transition-all ${pay.voided ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer shadow-xs'}`}
+                              title="Upload proof of payment to Cloudflare R2"
+                            >
+                              {uploadingPaymentId === (pay.id || idx) ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                                  <span className="text-indigo-600">Uploading...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600" />
+                                  <span>Upload</span>
+                                </>
+                              )}
                               <input 
                                 type="file" 
-                                accept="image/*" 
+                                accept="image/*,.pdf" 
                                 className="hidden" 
-                                disabled={pay.voided}
+                                disabled={pay.voided || uploadingPaymentId === (pay.id || idx)}
                                 onChange={(e) => {
                                   if(e.target.files && e.target.files[0]) {
                                     onUploadProof(pay.id || idx, e.target.files[0]);

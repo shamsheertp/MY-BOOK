@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/db.js';
 import { Prisma } from '@prisma/client';
+import { serverCache } from '../utils/cache.js';
 
 export const createContactSchema = z.object({
   code: z.string().optional(),
@@ -215,6 +216,8 @@ export const createContact = async (
       },
     });
 
+    serverCache.invalidate(['contacts', 'sales', 'purchases']);
+
     res.status(201).json({
       success: true,
       message: 'Contact created successfully.',
@@ -275,6 +278,8 @@ export const updateContact = async (
       },
     });
 
+    serverCache.invalidate(['contacts', 'sales', 'purchases']);
+
     res.json({
       success: true,
       message: 'Contact updated successfully.',
@@ -314,6 +319,8 @@ export const deleteContact = async (
     await prisma.contact.delete({
       where: { id: existing.id },
     });
+
+    serverCache.invalidate(['contacts', 'sales', 'purchases']);
 
     res.json({
       success: true,

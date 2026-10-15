@@ -1,4 +1,4 @@
-import { PrismaClient, Role, UserStatus, SaleStatus, PurchaseStatus } from '@prisma/client';
+import { PrismaClient, Role, UserStatus, SaleStatus, PurchaseStatus, ExpenseStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -826,6 +826,170 @@ async function main() {
     console.log('✓ Seeded 4 default purchase orders with line items, receipts, bills, and payments.');
   } else {
     console.log(`ℹ Purchases already exist (${purchasesCount} records).`);
+  }
+
+  // Seed Expense Categories
+  const standardCategories = [
+    'Office Supplies',
+    'Utilities',
+    'Rent & Lease',
+    'Internet & Telephone',
+    'Fuel & Transportation',
+    'Maintenance & Repairs',
+    'Employee Salaries',
+    'Taxes & Licenses',
+    'Software Subscriptions',
+    'Travel',
+    'Meals & Entertainment',
+    'Marketing & Advertising',
+  ];
+
+  for (const catName of standardCategories) {
+    await prisma.expenseCategory.upsert({
+      where: { name: catName },
+      update: {},
+      create: {
+        name: catName,
+        isDefault: true,
+      },
+    });
+  }
+  console.log(`✓ Ensured ${standardCategories.length} default expense categories.`);
+
+  // Seed initial expenses if empty
+  const expensesCount = await prisma.expense.count();
+  if (expensesCount === 0) {
+    const expensesToSeed = [
+      {
+        ref: 'EXP-001',
+        date: new Date('2026-10-01'),
+        category: 'Office Supplies',
+        amount: 250.00,
+        paymentMethod: 'Credit Card',
+        status: ExpenseStatus.PAID,
+        description: 'Stationery, printer ink, and office paper',
+        payee: 'Office Depot',
+        referenceNo: 'TXN-984210',
+      },
+      {
+        ref: 'EXP-002',
+        date: new Date('2026-10-05'),
+        category: 'Utilities',
+        amount: 120.50,
+        paymentMethod: 'Bank Transfer',
+        status: ExpenseStatus.PENDING,
+        description: 'Monthly workshop electricity bill',
+        payee: 'State Electricity Board',
+        referenceNo: 'EB-OCT-2026',
+      },
+      {
+        ref: 'EXP-003',
+        date: new Date('2026-10-08'),
+        category: 'Maintenance & Repairs',
+        amount: 450.00,
+        paymentMethod: 'Bank Transfer',
+        status: ExpenseStatus.PAID,
+        description: 'CNC machine hydraulic pump servicing and coolant replacement',
+        payee: 'Precision Machine Works',
+        referenceNo: 'INV-7712',
+      },
+      {
+        ref: 'EXP-004',
+        date: new Date('2026-10-10'),
+        category: 'Internet & Telephone',
+        amount: 85.00,
+        paymentMethod: 'UPI',
+        status: ExpenseStatus.PAID,
+        description: 'High-speed fiber broadband connection for warehouse and office',
+        payee: 'Airtel Broadband',
+        referenceNo: 'UPI/629103948',
+      },
+      {
+        ref: 'EXP-005',
+        date: new Date('2026-10-12'),
+        category: 'Fuel & Transportation',
+        amount: 175.00,
+        paymentMethod: 'Cash',
+        status: ExpenseStatus.PAID,
+        description: 'Diesel fuel for delivery transport truck',
+        payee: 'HP Fuel Station',
+        referenceNo: 'PET-44019',
+      },
+    ];
+
+    for (const exp of expensesToSeed) {
+      await prisma.expense.create({
+        data: exp,
+      });
+    }
+    console.log(`✓ Seeded ${expensesToSeed.length} default business expenses.`);
+  } else {
+    console.log(`ℹ Expenses already exist (${expensesCount} records).`);
+  }
+
+  // 10. Seed Sample Double-Entry Journal Entries if not existing
+  const journalsCount = await prisma.journalEntry.count();
+  if (journalsCount === 0) {
+    await prisma.journalEntry.create({
+      data: {
+        ref: 'JRN-2026001',
+        date: new Date('2026-10-01'),
+        narration: 'Owner Initial Equity & Capital Contribution into Bank Account',
+        status: 'POSTED',
+        totalDebit: 100000.00,
+        totalCredit: 100000.00,
+        lines: {
+          create: [
+            {
+              accountCode: '1020',
+              accountName: 'Bank Account (HDFC)',
+              description: 'Initial capital deposited into commercial bank',
+              debit: 100000.00,
+              credit: 0.00,
+            },
+            {
+              accountCode: '3000',
+              accountName: "Owner's Equity / Capital",
+              description: 'Share capital investment credited',
+              debit: 0.00,
+              credit: 100000.00,
+            },
+          ],
+        },
+      },
+    });
+
+    await prisma.journalEntry.create({
+      data: {
+        ref: 'JRN-2026002',
+        date: new Date('2026-10-05'),
+        narration: 'Depreciation adjustment for factory machinery & office equipment',
+        status: 'POSTED',
+        totalDebit: 4500.00,
+        totalCredit: 4500.00,
+        lines: {
+          create: [
+            {
+              accountCode: '5700',
+              accountName: 'Depreciation Expense',
+              description: 'Monthly asset depreciation adjustment',
+              debit: 4500.00,
+              credit: 0.00,
+            },
+            {
+              accountCode: '1500',
+              accountName: 'Fixed Assets (Machinery & Equipment)',
+              description: 'Accumulated depreciation write-off',
+              debit: 0.00,
+              credit: 4500.00,
+            },
+          ],
+        },
+      },
+    });
+    console.log('✓ Seeded initial double-entry Journal Vouchers.');
+  } else {
+    console.log(`ℹ Journal entries already exist (${journalsCount} records).`);
   }
 
   console.log('Seed completed successfully.');

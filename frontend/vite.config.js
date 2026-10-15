@@ -35,6 +35,9 @@ export default defineConfig({
           if (id.includes('node_modules/recharts') || id.includes('node_modules/d3')) {
             return 'vendor-charts';
           }
+          if (id.includes('node_modules/jspdf') || id.includes('node_modules/html2canvas') || id.includes('node_modules/dom-to-image-more')) {
+            return 'vendor-pdf';
+          }
         },
       },
     },

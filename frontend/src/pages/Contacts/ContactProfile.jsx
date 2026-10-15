@@ -49,18 +49,19 @@ export default function ContactProfile() {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 2
-    }).format(amount);
+    }).format(amount || 0);
   };
 
-  // Match sales based on previous mapping (CUST-00X matches CONT-00X digit)
-  const contactDigit = (contact?.code || contact?.id || 'CONT-001').includes('-')
-    ? (contact.code || contact.id).split('-')[1]
+  // Safely extract contact digit for customerId/supplierId mapping
+  const contactCode = contact?.code || contact?.id || 'CONT-001';
+  const contactDigit = typeof contactCode === 'string' && contactCode.includes('-')
+    ? contactCode.split('-')[1]
     : '001';
-  const customerId = `CUST-${contactDigit}`;
-  const supplierId = `SUP-${contactDigit}`;
+  const customerId = contact?.id || `CUST-${contactDigit}`;
+  const supplierId = contact?.id || `SUP-${contactDigit}`;
 
   const allSales = salesData
-    .filter(sale => sale.customerId === customerId)
+    .filter(sale => sale.customerId === customerId || (contact?.id && sale.customerId === contact.id) || (contact?.contactName && sale.customerName === contact.contactName))
     .map(sale => ({
       ...sale,
       type: 'Sale',
@@ -70,7 +71,7 @@ export default function ContactProfile() {
     }));
 
   const allPurchases = purchasesData
-    .filter(purchase => purchase.supplierId === supplierId)
+    .filter(purchase => purchase.supplierId === supplierId || (contact?.id && purchase.supplierId === contact.id) || (contact?.contactName && (purchase.supplierName === contact.contactName || purchase.supplierCompany === contact.companyName)))
     .map(purchase => ({
       ...purchase,
       type: 'Purchase',
@@ -82,13 +83,13 @@ export default function ContactProfile() {
   const allTransactions = [...allSales, ...allPurchases].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const filteredTransactions = allTransactions.filter(t => {
-    const matchesSearch = t.ref.toLowerCase().includes(searchQuery.toLowerCase()) || t.date.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === 'All' || t.status.toUpperCase() === filterStatus.toUpperCase();
-    const matchesType = filterType === 'All' || t.type.toUpperCase() === filterType.toUpperCase();
+    const matchesSearch = (t.ref || '').toLowerCase().includes(searchQuery.toLowerCase()) || (t.date || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === 'All' || (t.status || '').toUpperCase() === filterStatus.toUpperCase();
+    const matchesType = filterType === 'All' || (t.type || '').toUpperCase() === filterType.toUpperCase();
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const totalPages = Math.ceil(filteredTransactions.length / recordsPerPage);
+  const totalPages = Math.ceil(filteredTransactions.length / recordsPerPage) || 1;
   const paginatedTransactions = filteredTransactions.slice(
     (currentPage - 1) * recordsPerPage,
     currentPage * recordsPerPage
@@ -96,14 +97,7 @@ export default function ContactProfile() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterStatus, filterType, id]);
-
-  // Simulated loading for skeleton on mount / filter / page change
-  useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(() => setIsLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery, filterStatus, filterType, currentPage, id]);
+  }, [searchQuery, filterStatus, filterType]);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -114,6 +108,41 @@ export default function ContactProfile() {
     for (let p = start; p <= end; p++) pages.push(p);
     return pages;
   };
+
+  if (isLoading && !contact) {
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto pb-12 fade-in animate-pulse">
+        <div className="flex items-center space-x-2 text-slate-400 mb-2 w-fit">
+          <ArrowLeft className="w-4 h-4" />
+          <span className="font-medium text-sm">Back to Contacts</span>
+        </div>
+        <div className="h-28 bg-white/60 rounded-3xl border border-slate-100 shadow-sm"></div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-24 bg-white/60 rounded-2xl border border-slate-100 shadow-sm"></div>
+          ))}
+        </div>
+        <div className="h-80 bg-white/60 rounded-3xl border border-slate-100 shadow-sm"></div>
+      </div>
+    );
+  }
+
+  if (!isLoading && !contact) {
+    return (
+      <div className="max-w-7xl mx-auto py-16 text-center fade-in">
+        <div className="glass-card max-w-md mx-auto p-8 rounded-3xl border border-slate-100 shadow-sm bg-white/80">
+          <h2 className="text-xl font-extrabold text-slate-800 mb-2">Contact Not Found</h2>
+          <p className="text-slate-500 text-sm mb-6">The contact you are looking for does not exist or may have been deleted.</p>
+          <button
+            onClick={() => navigate('/contacts')}
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-100 cursor-pointer"
+          >
+            Back to Contacts
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 fade-in">

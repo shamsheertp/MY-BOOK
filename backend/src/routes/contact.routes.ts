@@ -12,16 +12,18 @@ import { authenticate, authorize } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { Role } from '@prisma/client';
 
+import { cacheResponse } from '../utils/cache.js';
+
 const router = Router();
 
 // Protect all contact routes with authentication
 router.use(authenticate);
 
-// Get all contacts (All authenticated users can view)
-router.get('/', getContacts);
+// Get all contacts (All authenticated users can view, cached with 45s TTL)
+router.get('/', cacheResponse('contacts', 45000), getContacts);
 
 // Get contact by ID or code
-router.get('/:id', getContactById);
+router.get('/:id', cacheResponse('contacts', 45000), getContactById);
 
 // Create new contact (Admin, Manager, Accountant)
 router.post(

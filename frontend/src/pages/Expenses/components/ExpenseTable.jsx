@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, CreditCard } from 'lucide-react';
+import { CheckCircle2, Clock, CreditCard, Ban } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function ExpenseTable({ paginatedExpenses, filteredExpenses, currentPage, setCurrentPage, itemsPerPage, totalPages, isLoading }) {
@@ -42,46 +42,55 @@ export default function ExpenseTable({ paginatedExpenses, filteredExpenses, curr
                 </tr>
               ))
             ) : paginatedExpenses.length > 0 ? (
-              paginatedExpenses.map((expense) => (
-                <tr 
-                  key={expense.id} 
-                  onClick={() => navigate(`/expenses/${expense.id}`)}
-                  className="hover:bg-white/80 transition-colors cursor-pointer group border-b border-slate-50 last:border-0"
-                >
-                  <td className="py-4 px-6">
-                    <div className="font-medium text-slate-900">{expense.date}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{expense.id}</div>
-                  </td>
-                  <td className="py-4 px-6">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 whitespace-nowrap">
-                      {expense.category}
-                    </span>
-                    <div className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
-                      <CreditCard className="w-3 h-3" />
-                      {expense.paymentMethod}
-                    </div>
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="text-sm text-slate-700 max-w-xs truncate">{expense.description || <span className="text-slate-400 italic">No description</span>}</div>
-                  </td>
-                  <td className="py-4 px-6 font-bold text-slate-800">
-                    ₹{expense.amount.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {expense.status === 'Paid' ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-100">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Paid
+              paginatedExpenses.map((expense) => {
+                const expenseId = expense.ref || expense.id;
+                const amt = Number(expense.amount || 0);
+                return (
+                  <tr 
+                    key={expense.id || expense.ref} 
+                    onClick={() => navigate(`/expenses/${expenseId}`)}
+                    className="hover:bg-white/80 transition-colors cursor-pointer group border-b border-slate-50 last:border-0"
+                  >
+                    <td className="py-4 px-6">
+                      <div className="font-medium text-slate-900">{expense.date}</div>
+                      <div className="text-xs text-slate-400 mt-0.5 font-mono">{expense.ref || expense.id}</div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 whitespace-nowrap">
+                        {expense.category}
                       </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-600 border border-amber-100">
-                        <Clock className="w-3.5 h-3.5" />
-                        Pending
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))
+                      <div className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
+                        <CreditCard className="w-3 h-3" />
+                        {expense.paymentMethod}
+                      </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <div className="text-sm text-slate-700 max-w-xs truncate">{expense.description || <span className="text-slate-400 italic">No description</span>}</div>
+                    </td>
+                    <td className="py-4 px-6 font-bold text-slate-800">
+                      ₹{amt.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {expense.status === 'Void' || expense.voided ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                          <Ban className="w-3.5 h-3.5" />
+                          VOID
+                        </span>
+                      ) : expense.status === 'Paid' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-100">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Paid
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-600 border border-amber-100">
+                          <Clock className="w-3.5 h-3.5" />
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
                 <td colSpan="5" className="py-12 text-center text-slate-500">

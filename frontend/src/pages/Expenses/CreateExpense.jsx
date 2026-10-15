@@ -1,40 +1,87 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, AlertCircle, Receipt, DollarSign, Calendar, Tag, CreditCard, AlignLeft, UploadCloud, X, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, Save, AlertCircle, Receipt, DollarSign, Calendar, Tag, CreditCard, AlignLeft, UploadCloud, X, CheckCircle2, Plus, Loader2, Settings } from 'lucide-react';
+import { expensesService, paymentMethodsService, uploadService } from '../../services/api';
 
 export default function CreateExpense({ isModal = false, isInline = false, onClose, onSave }) {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [paymentMethodsList, setPaymentMethodsList] = useState([]);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatLoading, setNewCatLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     category: '',
+    categoryId: null,
     amount: '',
     description: '',
-    paymentMethod: 'Credit Card',
+    paymentMethod: 'Cash',
+    paymentMethodId: null,
     status: 'Paid',
   });
   const [proofFile, setProofFile] = useState(null);
   const [errors, setErrors] = useState({});
 
-  const categories = [
-    'Office Supplies',
-    'Utilities',
-    'Rent & Lease',
-    'Internet & Telephone',
-    'Fuel & Transportation',
-    'Maintenance & Repairs',
-    'Employee Salaries',
-    'Taxes & Licenses',
-    'Software Subscriptions',
-    'Travel',
-    'Meals & Entertainment',
-    'Marketing & Advertising'
-  ];
-
-  const paymentMethods = ['Credit Card', 'Bank Transfer', 'Cash', 'Check', 'UPI'];
   const statuses = ['Paid', 'Pending'];
+
+  // Fetch categories and payment methods from DB
+  useEffect(() => {
+    expensesService.getCategories()
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setCategoriesList(res.data);
+        }
+      })
+      .catch((err) => console.warn('Failed to fetch categories:', err));
+
+    paymentMethodsService.getAll()
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setPaymentMethodsList(res.data);
+          const defaultPm = res.data.find(p => p.isDefault) || res.data[0];
+          if (defaultPm) {
+            setFormData(prev => ({
+              ...prev,
+              paymentMethod: defaultPm.name,
+              paymentMethodId: defaultPm.id,
+            }));
+          }
+        }
+      })
+      .catch((err) => console.warn('Failed to fetch payment methods:', err));
+  }, []);
+
+  const handleQuickAddCategory = async () => {
+    if (!newCatName.trim()) return;
+    setNewCatLoading(true);
+    try {
+      const res = await expensesService.createCategory({
+        name: newCatName.trim(),
+      });
+      if (res?.success && res.data) {
+        setCategoriesList(prev => [...prev, res.data]);
+        setFormData(prev => ({
+          ...prev,
+          category: res.data.name,
+          categoryId: res.data.id,
+        }));
+        setNewCatName('');
+        setIsAddingCategory(false);
+        setShowCategoryDropdown(false);
+      }
+    } catch (err) {
+      console.error('Failed to create category:', err);
+      setErrors(prev => ({ ...prev, category: err.response?.data?.message || 'Failed to add category' }));
+    } finally {
+      setNewCatLoading(false);
+    }
+  };
 
   const validate = () => {
     const newErrors = {};
@@ -55,40 +102,80 @@ export default function CreateExpense({ isModal = false, isInline = false, onClo
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (validate()) {
       setIsSubmitting(true);
+      setErrors({});
       
-      // Simulate API call
-      setTimeout(() => {
-        setIsSubmitting(false);
-        const newExpense = {
-          id: `EXP-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+      try {
+        let receiptImageUrl = null;
+        if (proofFile) {
+          try {
+            const uploadRes = await uploadService.uploadFile(proofFile, 'expenses');
+            receiptImageUrl = uploadRes?.data?.url || null;
+          } catch (uploadErr) {
+            console.warn('File upload failed, proceeding with expense creation:', uploadErr);
+          }
+        }
+
+        const payload = {
+          date: formData.date,
+          category: formData.category,
+          categoryId: formData.categoryId || null,
+          amount: parseFloat(formData.amount),
+          description: formData.description || null,
+          paymentMethod: formData.paymentMethod || 'Cash',
+          paymentMethodId: formData.paymentMethodId || null,
+          status: formData.status || 'Paid',
+          receiptImage: receiptImageUrl,
+        };
+
+        const res = await expensesService.create(payload);
+        const newExpense = res?.data || {
+          id: `EXP-${Date.now()}`,
           ...formData,
-          amount: parseFloat(formData.amount)
+          amount: parseFloat(formData.amount),
         };
 
         if (onSave) {
           onSave(newExpense);
-          setShowSuccess(true);
-          // Reset form
-          setFormData({
-            date: new Date().toISOString().split('T')[0],
-            category: '',
-            amount: '',
-            description: '',
-            paymentMethod: 'Credit Card',
-            status: 'Paid',
-          });
-          setProofFile(null);
-          setTimeout(() => setShowSuccess(false), 3000);
-        } else if (isModal && onClose) {
+        }
+        setShowSuccess(true);
+        // Reset form
+        setFormData({
+          date: new Date().toISOString().split('T')[0],
+          category: '',
+          categoryId: null,
+          amount: '',
+          description: '',
+          paymentMethod: paymentMethodsList[0]?.name || 'Cash',
+          paymentMethodId: paymentMethodsList[0]?.id || null,
+          status: 'Paid',
+        });
+        setProofFile(null);
+        setTimeout(() => setShowSuccess(false), 3000);
+
+        if (isModal && onClose) {
           onClose();
-        } else {
+        } else if (!isInline) {
           navigate('/expenses');
         }
-      }, 800);
+      } catch (err) {
+        console.error('Failed to create expense:', err);
+        const apiErrors = err.response?.data?.errors;
+        if (Array.isArray(apiErrors)) {
+          const mapped = {};
+          apiErrors.forEach(errItem => {
+            mapped[errItem.field] = errItem.message;
+          });
+          setErrors(mapped);
+        } else {
+          setErrors({ general: err.response?.data?.message || err.message || 'Failed to record expense' });
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -131,6 +218,12 @@ export default function CreateExpense({ isModal = false, isInline = false, onClo
       )}
 
       <form onSubmit={handleSubmit} className={isInline ? 'space-y-4' : 'space-y-6'}>
+        {errors.general && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errors.general}</span>
+          </div>
+        )}
         <div className={`glass-card ${isInline ? 'p-5 rounded-2xl' : 'p-8 rounded-3xl'} border border-slate-100 shadow-sm relative`}>
           {!isInline && (
             <>
@@ -199,10 +292,48 @@ export default function CreateExpense({ isModal = false, isInline = false, onClo
 
             {/* Category */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                <Tag className="w-4 h-4 text-slate-400" />
-                Category *
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Tag className="w-4 h-4 text-slate-400" />
+                  Category *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(prev => !prev)}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {isAddingCategory ? 'Cancel' : 'New Category'}
+                </button>
+              </div>
+
+              {/* Inline Quick Add Category Form */}
+              {isAddingCategory && (
+                <div className="p-2.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl flex items-center gap-2 animate-in fade-in duration-150">
+                  <input
+                    type="text"
+                    placeholder="Type new category name..."
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleQuickAddCategory();
+                      }
+                    }}
+                    className="flex-1 px-3 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleQuickAddCategory}
+                    disabled={newCatLoading || !newCatName.trim()}
+                    className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1 shrink-0 transition-colors"
+                  >
+                    {newCatLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                    Save to DB
+                  </button>
+                </div>
+              )}
               
               <div className="relative">
                 <input
@@ -210,9 +341,17 @@ export default function CreateExpense({ isModal = false, isInline = false, onClo
                   name="category"
                   placeholder="Select or type a category..."
                   value={formData.category}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    const typed = e.target.value;
+                    const matched = categoriesList.find(c => c.name.toLowerCase() === typed.toLowerCase());
+                    setFormData(prev => ({
+                      ...prev,
+                      category: typed,
+                      categoryId: matched ? matched.id : null,
+                    }));
+                  }}
                   onFocus={() => setShowCategoryDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowCategoryDropdown(false), 200)}
+                  onBlur={() => setTimeout(() => setShowCategoryDropdown(false), 250)}
                   autoComplete="off"
                   className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:outline-none transition-all pr-10 ${
                     errors.category ? 'border-red-300 focus:ring-red-500/20 focus:border-red-500 bg-red-50/30' : 'border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-500'
@@ -223,25 +362,48 @@ export default function CreateExpense({ isModal = false, isInline = false, onClo
                 </div>
 
                 {showCategoryDropdown && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar overflow-hidden">
-                    {categories.filter(cat => cat.toLowerCase().includes(formData.category.toLowerCase())).length > 0 ? (
-                      categories
-                        .filter(cat => cat.toLowerCase().includes(formData.category.toLowerCase()))
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar overflow-hidden divide-y divide-slate-100">
+                    {categoriesList.filter(cat => cat.name.toLowerCase().includes(formData.category.toLowerCase())).length > 0 ? (
+                      categoriesList
+                        .filter(cat => cat.name.toLowerCase().includes(formData.category.toLowerCase()))
                         .map(cat => (
                           <div 
-                            key={cat} 
+                            key={cat.id || cat.name} 
                             onMouseDown={() => {
-                              setFormData(prev => ({...prev, category: cat}));
+                              setFormData(prev => ({
+                                ...prev,
+                                category: cat.name,
+                                categoryId: cat.id,
+                              }));
                               setShowCategoryDropdown(false);
                             }}
-                            className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer text-sm text-slate-700 font-medium border-b border-slate-50 last:border-0 transition-colors"
+                            className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer text-sm text-slate-700 font-medium flex items-center justify-between transition-colors"
                           >
-                            {cat}
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: cat.color || '#6366f1' }}
+                              />
+                              <span>{cat.name}</span>
+                            </div>
+                            {cat.isDefault && (
+                              <span className="text-[10px] text-slate-400 uppercase font-semibold">Standard</span>
+                            )}
                           </div>
                         ))
                     ) : (
-                      <div className="px-4 py-3 text-sm text-slate-500 italic bg-slate-50">
-                        "{formData.category}" will be added as a new category.
+                      <div className="p-3 text-xs text-slate-500 bg-slate-50 flex items-center justify-between">
+                        <span>"{formData.category}" will be saved as new.</span>
+                        <button
+                          type="button"
+                          onMouseDown={() => {
+                            setNewCatName(formData.category);
+                            handleQuickAddCategory();
+                          }}
+                          className="text-indigo-600 font-semibold hover:underline"
+                        >
+                          Save now
+                        </button>
                       </div>
                     )}
                   </div>
@@ -257,19 +419,44 @@ export default function CreateExpense({ isModal = false, isInline = false, onClo
 
             {/* Payment Method */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                <CreditCard className="w-4 h-4 text-slate-400" />
-                Payment Method *
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-slate-400" />
+                  Payment Method *
+                </label>
+                <Link
+                  to="/settings/finance"
+                  target="_blank"
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 transition-colors"
+                  title="Configure payment methods in Settings"
+                >
+                  <Settings className="w-3 h-3" />
+                  Manage
+                </Link>
+              </div>
               <select
                 name="paymentMethod"
                 value={formData.paymentMethod}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none transition-all appearance-none"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const matched = paymentMethodsList.find(pm => pm.name === val);
+                  setFormData(prev => ({
+                    ...prev,
+                    paymentMethod: val,
+                    paymentMethodId: matched ? matched.id : null,
+                  }));
+                }}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none transition-all appearance-none cursor-pointer"
               >
-                {paymentMethods.map(method => (
-                  <option key={method} value={method}>{method}</option>
-                ))}
+                {paymentMethodsList.length === 0 ? (
+                  <option value="Cash">Cash</option>
+                ) : (
+                  paymentMethodsList.map(method => (
+                    <option key={method.id} value={method.name}>
+                      {method.name} {method.code ? `(${method.code})` : ''}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 

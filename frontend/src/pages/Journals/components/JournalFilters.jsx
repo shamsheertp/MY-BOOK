@@ -8,7 +8,11 @@ export function JournalFilters({
   setDateFilter, 
   userFilter, 
   setUserFilter, 
-  usersList 
+  usersList,
+  typeFilter,
+  setTypeFilter,
+  onNewEntry,
+  onExport,
 }) {
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 print:hidden">
@@ -28,6 +32,19 @@ export function JournalFilters({
       </div>
       
       <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        {setTypeFilter && (
+          <select
+            className="px-3 py-2.5 bg-white/60 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer text-sm font-medium text-slate-700 shadow-sm"
+            value={typeFilter || 'All'}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="All">All Vouchers</option>
+            <option value="Manual">Manual Journals</option>
+            <option value="Sales">Sales Invoices</option>
+            <option value="Purchases">Purchase Orders</option>
+          </select>
+        )}
+
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Calendar className="w-4 h-4 text-slate-400 group-focus-within:text-indigo-500" />
@@ -44,30 +61,17 @@ export function JournalFilters({
           </select>
         </div>
 
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <User className="w-4 h-4 text-slate-400 group-focus-within:text-indigo-500" />
-          </div>
-          <select
-            className="w-full pl-9 pr-8 py-2.5 bg-white/60 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none cursor-pointer transition-all shadow-sm backdrop-blur-xl text-sm font-medium text-slate-700"
-            value={userFilter}
-            onChange={(e) => setUserFilter(e.target.value)}
-          >
-            <option value="All">All Users</option>
-            {usersList.map((u, idx) => (
-              <option key={idx} value={u}>{u}</option>
-            ))}
-          </select>
-        </div>
-
-        <button className="flex items-center px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm text-sm">
+        <button
+          onClick={onExport}
+          className="flex items-center px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm text-sm cursor-pointer"
+        >
           <Download className="w-4 h-4 mr-2" />
-          Export
+          Export CSV
         </button>
 
         <button 
-          onClick={() => alert("Create Journal Entry not implemented yet")}
-          className="flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm shadow-indigo-200 transition-all text-sm group"
+          onClick={onNewEntry}
+          className="flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-600/20 transition-all text-sm group cursor-pointer"
         >
           <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 transition-transform duration-300" />
           New Entry

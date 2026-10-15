@@ -84,75 +84,137 @@ export async function refreshAccessToken(base = API_BASE_URL) {
   return refreshPromise;
 }
 
+// High-performance In-Memory Request Cache and Deduplication Map
+const apiCache = new Map();
+const inFlightRequests = new Map();
+const DEFAULT_CACHE_TTL_MS = 25000; // 25 seconds cache lifetime for instant navigation
+
 /**
- * Core HTTP Request Wrapper
+ * Clear or invalidate in-memory cache
  */
-export async function apiRequest(endpoint, { method = 'GET', body, headers = {}, customBaseUrl } = {}) {
+export function clearApiCache(prefix = '') {
+  if (!prefix) {
+    apiCache.clear();
+  } else {
+    for (const key of apiCache.keys()) {
+      if (key.includes(prefix)) {
+        apiCache.delete(key);
+      }
+    }
+  }
+}
+
+/**
+ * Core HTTP Request Wrapper with intelligent caching and request deduplication
+ */
+export async function apiRequest(endpoint, { method = 'GET', body, headers = {}, customBaseUrl, bypassCache = false } = {}) {
   const base = customBaseUrl !== undefined ? customBaseUrl : API_BASE_URL;
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const url = `${base}${path}`;
 
-  const nonRefreshableEndpoints = ['/auth/login', '/auth/register', '/auth/refresh'];
-  const isAuthEntryRoute = nonRefreshableEndpoints.some((ep) => endpoint.startsWith(ep));
+  const isGet = method.toUpperCase() === 'GET';
+  const cacheKey = `${method.toUpperCase()}:${url}`;
 
-  const requestHeaders = {
-    'Content-Type': 'application/json',
-    ...headers,
-  };
-
-  let token = tokenStorage.getAccessToken();
-  // If accessToken is missing but refreshToken is present, attempt proactive refresh
-  if (!token && tokenStorage.getRefreshToken() && !isAuthEntryRoute) {
-    token = await refreshAccessToken(base);
+  // 1. Check in-memory cache for instant 0ms responses on section switching
+  if (isGet && !bypassCache && apiCache.has(cacheKey)) {
+    const cached = apiCache.get(cacheKey);
+    const age = Date.now() - cached.timestamp;
+    if (age < DEFAULT_CACHE_TTL_MS) {
+      return { data: cached.data, status: cached.status, durationMs: 0, fromCache: true };
+    }
   }
 
-  if (token && !requestHeaders.Authorization) {
-    requestHeaders.Authorization = `Bearer ${token}`;
+  // 2. Request deduplication: if identical GET is already in-flight, reuse promise
+  if (isGet && inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey);
   }
 
-  const config = {
-    method,
-    headers: requestHeaders,
-  };
+  const executeRequest = async () => {
+    const nonRefreshableEndpoints = ['/auth/login', '/auth/register', '/auth/refresh'];
+    const isAuthEntryRoute = nonRefreshableEndpoints.some((ep) => endpoint.startsWith(ep));
 
-  if (body !== undefined) {
-    config.body = typeof body === 'string' ? body : JSON.stringify(body);
-  }
+    const requestHeaders = {
+      'Content-Type': 'application/json',
+      ...headers,
+    };
 
-  const startTime = performance.now();
-  try {
-    let response = await fetch(url, config);
-    const durationMs = Math.round(performance.now() - startTime);
+    let token = tokenStorage.getAccessToken();
+    if (!token && tokenStorage.getRefreshToken() && !isAuthEntryRoute) {
+      token = await refreshAccessToken(base);
+    }
 
-    // If unauthorized and not an auth entry route, try refreshing the token once
-    if (response.status === 401 && !isAuthEntryRoute) {
-      const refreshedToken = await refreshAccessToken(base);
-      if (refreshedToken) {
-        config.headers.Authorization = `Bearer ${refreshedToken}`;
-        response = await fetch(url, config);
+    if (token && !requestHeaders.Authorization) {
+      requestHeaders.Authorization = `Bearer ${token}`;
+    }
+
+    const config = {
+      method,
+      headers: requestHeaders,
+    };
+
+    if (body !== undefined) {
+      config.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+
+    const startTime = performance.now();
+    try {
+      let response = await fetch(url, config);
+      const durationMs = Math.round(performance.now() - startTime);
+
+      // If unauthorized and not an auth entry route, try refreshing the token once
+      if (response.status === 401 && !isAuthEntryRoute) {
+        const refreshedToken = await refreshAccessToken(base);
+        if (refreshedToken) {
+          config.headers.Authorization = `Bearer ${refreshedToken}`;
+          response = await fetch(url, config);
+        }
+      }
+
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
+
+      if (!response.ok) {
+        const errorMsg =
+          (data && typeof data === 'object' && (data.message || data.error)) ||
+          `HTTP ${response.status} ${response.statusText}`;
+        throw new ApiError(errorMsg, response.status, data);
+      }
+
+      // Store in memory cache for instant future loads
+      if (isGet) {
+        apiCache.set(cacheKey, {
+          data,
+          status: response.status,
+          timestamp: Date.now(),
+        });
+      } else {
+        // Mutation occurred (create/update/delete/void): invalidate cache so user immediately sees fresh state
+        clearApiCache();
+      }
+
+      return { data, status: response.status, durationMs };
+    } catch (error) {
+      if (error instanceof ApiError || (error && typeof error.status === 'number')) throw error;
+      throw new ApiError(error?.message || 'Network error occurred', 0, null);
+    } finally {
+      if (isGet) {
+        inFlightRequests.delete(cacheKey);
       }
     }
+  };
 
-    let data;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      data = await response.text();
-    }
-
-    if (!response.ok) {
-      const errorMsg =
-        (data && typeof data === 'object' && (data.message || data.error)) ||
-        `HTTP ${response.status} ${response.statusText}`;
-      throw new ApiError(errorMsg, response.status, data);
-    }
-
-    return { data, status: response.status, durationMs };
-  } catch (error) {
-    if (error instanceof ApiError || (error && typeof error.status === 'number')) throw error;
-    throw new ApiError(error?.message || 'Network error occurred', 0, null);
+  if (isGet) {
+    const promise = executeRequest();
+    inFlightRequests.set(cacheKey, promise);
+    return promise;
   }
+
+  return executeRequest();
 }
 
 export const api = {
@@ -412,6 +474,17 @@ export const salesService = {
     return res.data;
   },
 
+  async uploadPaymentProof(saleId, paymentId, file) {
+    // 1. Upload to Cloudflare R2
+    const uploadRes = await uploadService.uploadFile(file, 'payments');
+    const fileUrl = uploadRes?.data?.url;
+    if (!fileUrl) throw new Error('Document upload to storage failed');
+
+    // 2. Attach proof URL to database payment record
+    const res = await api.patch(`/sales/${saleId}/payments/${paymentId}/proof`, { image: fileUrl });
+    return { ...res.data, url: fileUrl };
+  },
+
   async void(id, reasonData = {}) {
     const res = await api.post(`/sales/${id}/void`, reasonData);
     return res.data;
@@ -485,6 +558,202 @@ export const purchasesService = {
 
   async delete(id) {
     const res = await api.delete(`/purchases/${id}`);
+    return res.data;
+  },
+};
+
+// Expenses Service Endpoints (Saves directly to DB via backend)
+export const expensesService = {
+  async list({
+    page = 1,
+    limit = 20,
+    search = '',
+    category = '',
+    status = '',
+    dateFrom = '',
+    dateTo = '',
+    sortBy = 'date',
+    sortOrder = 'desc',
+  } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
+    if (search) params.append('search', search);
+    if (category && category !== 'All') params.append('category', category);
+    if (status && status !== 'All') params.append('status', status);
+    if (dateFrom) params.append('dateFrom', dateFrom);
+    if (dateTo) params.append('dateTo', dateTo);
+    if (sortBy) params.append('sortBy', sortBy);
+    if (sortOrder) params.append('sortOrder', sortOrder);
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await api.get(`/expenses${query}`);
+    return res.data;
+  },
+
+  async getSummary(year) {
+    const query = year ? `?year=${year}` : '';
+    const res = await api.get(`/expenses/summary${query}`);
+    return res.data;
+  },
+
+  async getCategories() {
+    const res = await api.get('/expenses/categories');
+    return res.data;
+  },
+
+  async createCategory(categoryData) {
+    const res = await api.post('/expenses/categories', categoryData);
+    return res.data;
+  },
+
+  async updateCategory(id, categoryData) {
+    const res = await api.put(`/expenses/categories/${id}`, categoryData);
+    return res.data;
+  },
+
+  async deleteCategory(id) {
+    const res = await api.delete(`/expenses/categories/${id}`);
+    return res.data;
+  },
+
+  async getById(id) {
+    const res = await api.get(`/expenses/${id}`);
+    return res.data;
+  },
+
+  async create(expenseData) {
+    const res = await api.post('/expenses', expenseData);
+    return res.data;
+  },
+
+  async update(id, expenseData) {
+    const res = await api.put(`/expenses/${id}`, expenseData);
+    return res.data;
+  },
+
+  async void(id, voidData = {}) {
+    const res = await api.post(`/expenses/${id}/void`, voidData);
+    return res.data;
+  },
+
+  async delete(id) {
+    const res = await api.delete(`/expenses/${id}`);
+    return res.data;
+  },
+};
+
+// Payment Methods Service (DB saved and customizable in Settings)
+export const paymentMethodsService = {
+  async getAll() {
+    const res = await api.get('/payment-methods');
+    return res.data;
+  },
+
+  async create(data) {
+    const res = await api.post('/payment-methods', data);
+    return res.data;
+  },
+
+  async update(id, data) {
+    const res = await api.put(`/payment-methods/${id}`, data);
+    return res.data;
+  },
+
+  async delete(id) {
+    const res = await api.delete(`/payment-methods/${id}`);
+    return res.data;
+  },
+};
+
+// Journals Service (Double-entry accounting, live DB)
+export const journalsService = {
+  async list({ page = 1, limit = 50, search = '', status = '', dateFrom = '', dateTo = '' } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
+    if (search) params.append('search', search);
+    if (status && status !== 'ALL') params.append('status', status.toUpperCase());
+    if (dateFrom) params.append('dateFrom', dateFrom);
+    if (dateTo) params.append('dateTo', dateTo);
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await api.get(`/journals${query}`);
+    return res.data;
+  },
+
+  async getById(id) {
+    const res = await api.get(`/journals/${id}`);
+    return res.data;
+  },
+
+  async create(data) {
+    const res = await api.post('/journals', data);
+    return res.data;
+  },
+
+  async void(id, voidData = {}) {
+    const res = await api.post(`/journals/${id}/void`, voidData);
+    return res.data;
+  },
+};
+
+// General Ledger Service (Live chart of accounts & running balances)
+export const ledgersService = {
+  async getAccounts() {
+    const res = await api.get('/ledgers/accounts');
+    return res.data;
+  },
+
+  async getAccountDetails(code) {
+    const res = await api.get(`/ledgers/accounts/${code}`);
+    return res.data;
+  },
+};
+
+// Financial Reports Service (Live P&L, Sales & Expenses Statements)
+export const reportsService = {
+  async getProfitAndLoss({ dateFrom = '', dateTo = '', year = '' } = {}) {
+    const params = new URLSearchParams();
+    if (dateFrom) params.append('dateFrom', dateFrom);
+    if (dateTo) params.append('dateTo', dateTo);
+    if (year) params.append('year', year);
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await api.get(`/reports/profit-and-loss${query}`);
+    return res.data;
+  },
+};
+
+// Document & Attachment Upload Service (Cloudflare R2 / S3)
+export const uploadService = {
+  async uploadFile(file, { folder = 'documents' } = {}) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', folder);
+
+    const base = API_BASE_URL;
+    const token = tokenStorage.getAccessToken();
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${base}/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new ApiError(data?.message || 'File upload failed', res.status, data);
+    }
+    return data;
+  },
+
+  async getStatus() {
+    const res = await api.get('/upload/status');
     return res.data;
   },
 };

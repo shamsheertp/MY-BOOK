@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/db.js';
 import { Prisma, PurchaseStatus } from '@prisma/client';
+import { serverCache } from '../utils/cache.js';
 
 export const createPurchaseItemSchema = z.object({
   id: z.string().optional().nullable(),
@@ -85,29 +86,27 @@ export const voidPurchaseSchema = z.object({
  */
 async function generateNextPurchaseRef(): Promise<string> {
   const currentYear = new Date().getFullYear();
-  const purchases = await prisma.purchase.findMany({
+  const lastPurchase = await prisma.purchase.findFirst({
     where: {
       ref: {
         startsWith: `PO-${currentYear}`,
       },
     },
+    orderBy: { ref: 'desc' },
     select: { ref: true },
   });
 
-  let maxNum = 10;
-  for (const p of purchases) {
-    if (p.ref) {
-      const match = p.ref.match(new RegExp(`PO-${currentYear}(\\d+)`));
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNum) {
-          maxNum = num;
-        }
+  let nextNum = 11;
+  if (lastPurchase?.ref) {
+    const match = lastPurchase.ref.match(new RegExp(`PO-${currentYear}(\\d+)`));
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num)) {
+        nextNum = num + 1;
       }
     }
   }
 
-  const nextNum = maxNum + 1;
   return `PO-${currentYear}${nextNum.toString().padStart(3, '0')}`;
 }
 
@@ -115,66 +114,63 @@ async function generateNextPurchaseRef(): Promise<string> {
  * Generate next GRN reference like GRN-001
  */
 async function generateNextReceiptRef(): Promise<string> {
-  const receipts = await prisma.purchaseReceipt.findMany({
+  const lastReceipt = await prisma.purchaseReceipt.findFirst({
     where: { ref: { startsWith: 'GRN-' } },
+    orderBy: { ref: 'desc' },
     select: { ref: true },
   });
 
-  let maxNum = 10;
-  for (const r of receipts) {
-    if (r.ref) {
-      const match = r.ref.match(/GRN-(\d+)/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
-      }
+  let nextNum = 11;
+  if (lastReceipt?.ref) {
+    const match = lastReceipt.ref.match(/GRN-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num)) nextNum = num + 1;
     }
   }
-  return `GRN-${(maxNum + 1).toString().padStart(3, '0')}`;
+  return `GRN-${nextNum.toString().padStart(3, '0')}`;
 }
 
 /**
  * Generate next Purchase Bill reference like BILL-001
  */
 async function generateNextBillRef(): Promise<string> {
-  const bills = await prisma.purchaseBill.findMany({
+  const lastBill = await prisma.purchaseBill.findFirst({
     where: { ref: { startsWith: 'BILL-' } },
+    orderBy: { ref: 'desc' },
     select: { ref: true },
   });
 
-  let maxNum = 10;
-  for (const b of bills) {
-    if (b.ref) {
-      const match = b.ref.match(/BILL-(\d+)/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
-      }
+  let nextNum = 11;
+  if (lastBill?.ref) {
+    const match = lastBill.ref.match(/BILL-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num)) nextNum = num + 1;
     }
   }
-  return `BILL-${(maxNum + 1).toString().padStart(3, '0')}`;
+  return `BILL-${nextNum.toString().padStart(3, '0')}`;
 }
 
 /**
  * Generate next payment reference like PAY-OUT-001
  */
 async function generateNextPaymentRef(): Promise<string> {
-  const payments = await prisma.purchasePayment.findMany({
+  const lastPayment = await prisma.purchasePayment.findFirst({
     where: { ref: { startsWith: 'PAY-OUT-' } },
+    orderBy: { ref: 'desc' },
     select: { ref: true },
   });
 
-  let maxNum = 10;
-  for (const p of payments) {
-    if (p.ref) {
-      const match = p.ref.match(/PAY-OUT-(\d+)/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
-      }
+  let nextNum = 11;
+  if (lastPayment?.ref) {
+    const match = lastPayment.ref.match(/PAY-OUT-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num)) nextNum = num + 1;
     }
   }
-  return `PAY-OUT-${(maxNum + 1).toString().padStart(3, '0')}`;
+  return `PAY-OUT-${nextNum.toString().padStart(3, '0')}`;
 }
 
 /**
@@ -292,14 +288,7 @@ export async function getPurchases(req: Request, res: Response, next: NextFuncti
         where,
         include: {
           supplier: true,
-          items: {
-            include: { product: true },
-          },
-          receipts: true,
-          bills: true,
-          payments: {
-            orderBy: { date: 'desc' },
-          },
+          items: true,
         },
         orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
@@ -425,32 +414,37 @@ export async function createPurchase(req: Request, res: Response, next: NextFunc
       ref = await generateNextPurchaseRef();
     } else {
       ref = ref.trim();
-      const existing = await prisma.purchase.findUnique({ where: { ref } });
-      if (existing) {
-        res.status(400).json({
-          success: false,
-          message: `Purchase reference "${ref}" already exists`,
-        });
-        return;
-      }
     }
 
-    if (supplierId) {
-      const contact = await prisma.contact.findFirst({
-        where: {
-          OR: [{ id: supplierId }, { code: supplierId }],
-        },
+    // Parallelize purchase ref uniqueness check and supplier contact lookup
+    const [existing, contact] = await Promise.all([
+      prisma.purchase.findUnique({ where: { ref }, select: { id: true } }),
+      supplierId
+        ? prisma.contact.findFirst({
+            where: {
+              OR: [{ id: supplierId }, { code: supplierId }],
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (existing) {
+      res.status(400).json({
+        success: false,
+        message: `Purchase reference "${ref}" already exists`,
       });
-      if (contact) {
-        supplierId = contact.id;
-        supplierName = supplierName || contact.contactName;
-        supplierCompany = supplierCompany || contact.companyName || '';
-        supplierEmail = supplierEmail || contact.email || '';
-        supplierPhone = supplierPhone || contact.phone || '';
-        supplierAddress = supplierAddress || contact.address || '';
-      } else {
-        supplierId = null;
-      }
+      return;
+    }
+
+    if (contact) {
+      supplierId = contact.id;
+      supplierName = supplierName || contact.contactName;
+      supplierCompany = supplierCompany || contact.companyName || '';
+      supplierEmail = supplierEmail || contact.email || '';
+      supplierPhone = supplierPhone || contact.phone || '';
+      supplierAddress = supplierAddress || contact.address || '';
+    } else if (supplierId) {
+      supplierId = null;
     }
 
     let subtotal = 0;
@@ -508,6 +502,8 @@ export async function createPurchase(req: Request, res: Response, next: NextFunc
         payments: true,
       },
     });
+
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
 
     res.status(201).json({
       success: true,
@@ -636,6 +632,8 @@ export async function createReceipt(req: Request, res: Response, next: NextFunct
       },
     });
 
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
+
     res.status(201).json({
       success: true,
       message: `Goods receipt note ${ref} recorded. Inventory stock increased by ${totalReceivedInThisGrn} kg.`,
@@ -724,6 +722,8 @@ export async function voidReceipt(req: Request, res: Response, next: NextFunctio
         payments: { orderBy: { date: 'desc' } },
       },
     });
+
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
 
     res.json({
       success: true,
@@ -831,6 +831,8 @@ export async function createBill(req: Request, res: Response, next: NextFunction
       },
     });
 
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
+
     res.status(201).json({
       success: true,
       message: `Purchase bill ${ref} created for ₹${result.amount}. Payables updated.`,
@@ -907,6 +909,8 @@ export async function voidBill(req: Request, res: Response, next: NextFunction) 
         payments: { orderBy: { date: 'desc' } },
       },
     });
+
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
 
     res.json({
       success: true,
@@ -1027,6 +1031,8 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
       },
     });
 
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
+
     res.json({
       success: true,
       message: `Payment of ₹${paymentAmount.toFixed(2)} recorded successfully`,
@@ -1111,6 +1117,8 @@ export async function voidPayment(req: Request, res: Response, next: NextFunctio
         payments: { orderBy: { date: 'desc' } },
       },
     });
+
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
 
     res.json({
       success: true,
@@ -1234,6 +1242,8 @@ export async function voidPurchase(req: Request, res: Response, next: NextFuncti
       },
     });
 
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
+
     res.json({
       success: true,
       message: `Purchase order ${purchase.ref} has been voided. Stock and payables adjusted.`,
@@ -1281,6 +1291,8 @@ export async function deletePurchase(req: Request, res: Response, next: NextFunc
 
       await tx.purchase.delete({ where: { id: purchase.id } });
     });
+
+    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
 
     res.json({
       success: true,
