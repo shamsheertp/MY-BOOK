@@ -1,8 +1,14 @@
 const DEFAULT_API_URL = '/api';
 
-export const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || DEFAULT_API_URL
-).replace(/\/$/, '');
+export const API_BASE_URL = (() => {
+  const raw = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).trim().replace(/\/$/, '');
+  if (!raw || raw === '/api') return '/api';
+  // If user entered a domain like my-book-production-f98b.up.railway.app/api without https://
+  if (!raw.startsWith('/') && !/^https?:\/\//i.test(raw)) {
+    return `https://${raw}`;
+  }
+  return raw;
+})();
 
 // Storage keys
 const TOKEN_KEY = 'mybook_auth_token';

@@ -11,7 +11,17 @@ TARGET_URL="${BACKEND_URL:-${VITE_API_URL:-}}"
 if [ -n "$TARGET_URL" ] && [ "$TARGET_URL" != "/api" ]; then
   # Strip trailing /api, /api/, and trailing slashes
   CLEANED_URL=$(echo "$TARGET_URL" | sed -e 's|/api/*$||' -e 's|/*$||')
-  export BACKEND_URL="$CLEANED_URL"
+  case "$CLEANED_URL" in
+    http://*|https://*)
+      export BACKEND_URL="$CLEANED_URL"
+      ;;
+    backend:*|localhost:*|127.0.0.1:*|http:*)
+      export BACKEND_URL="http://$CLEANED_URL"
+      ;;
+    *)
+      export BACKEND_URL="https://$CLEANED_URL"
+      ;;
+  esac
 elif [ -n "$RAILWAY_PROJECT_ID" ] && [ -z "$BACKEND_URL" ]; then
   # Automatically use Railway private networking if deployed on Railway
   export BACKEND_URL="http://backend.railway.internal:5000"
