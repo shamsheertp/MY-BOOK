@@ -6,9 +6,41 @@ import { uploadToR2, isR2Configured } from '../config/r2.js';
 import { config } from '../config/env.js';
 
 // Local uploads directory fallback if R2 is not configured
-const LOCAL_UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(LOCAL_UPLOADS_DIR)) {
-  fs.mkdirSync(LOCAL_UPLOADS_DIR, { recursive: true });
+let cachedUploadsDir: string | null = null;
+
+export function getLocalUploadsDir(): string {
+  if (cachedUploadsDir && fs.existsSync(cachedUploadsDir)) {
+    return cachedUploadsDir;
+  }
+
+  const primaryDir = process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'uploads');
+  try {
+    if (!fs.existsSync(primaryDir)) {
+      fs.mkdirSync(primaryDir, { recursive: true });
+    }
+    cachedUploadsDir = primaryDir;
+    return primaryDir;
+  } catch (err) {
+    console.warn(`[Upload] Cannot write to ${primaryDir} (${(err as Error).message}). Falling back to /tmp/uploads.`);
+    const fallbackDir = path.resolve('/tmp', 'uploads');
+    try {
+      if (!fs.existsSync(fallbackDir)) {
+        fs.mkdirSync(fallbackDir, { recursive: true });
+      }
+      cachedUploadsDir = fallbackDir;
+      return fallbackDir;
+    } catch (fallbackErr) {
+      console.error('[Upload] Failed to create fallback /tmp/uploads directory:', fallbackErr);
+      return fallbackDir;
+    }
+  }
+}
+
+// Pre-initialize on boot safely without throwing fatal error
+try {
+  getLocalUploadsDir();
+} catch (err) {
+  console.warn('[Upload] Deferred directory creation until first upload:', (err as Error).message);
 }
 
 /**
@@ -46,7 +78,8 @@ export async function uploadDocument(req: Request, res: Response, next: NextFunc
       storageType = 'cloudflare-r2';
     } else {
       // 2. Safe local fallback if R2 credentials are not yet configured in .env
-      const localFilePath = path.join(LOCAL_UPLOADS_DIR, uniqueKey);
+      const targetDir = getLocalUploadsDir();
+      const localFilePath = path.join(targetDir, uniqueKey);
       const localFileDir = path.dirname(localFilePath);
       if (!fs.existsSync(localFileDir)) {
         fs.mkdirSync(localFileDir, { recursive: true });

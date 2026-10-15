@@ -52,6 +52,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve local upload files statically as fallback
 app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static('/tmp/uploads'));
 
 // Request logging middleware
 app.use((req, _res, next) => {

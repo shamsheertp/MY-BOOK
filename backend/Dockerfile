@@ -40,6 +40,9 @@ ENV PORT=5000
 # Install runtime OpenSSL for Prisma
 RUN apk add --no-cache openssl
 
+# Pre-create /app/uploads and grant full ownership to non-root node user
+RUN mkdir -p /app/uploads && chown -R node:node /app
+
 # Run container as non-root user for security
 USER node
 
