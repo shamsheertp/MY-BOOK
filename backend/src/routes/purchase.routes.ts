@@ -3,6 +3,7 @@ import {
   getPurchases,
   getPurchaseById,
   createPurchase,
+  updatePurchase,
   createReceipt,
   voidReceipt,
   createBill,
@@ -12,6 +13,7 @@ import {
   voidPurchase,
   deletePurchase,
   createPurchaseSchema,
+  updatePurchaseSchema,
   createReceiptSchema,
   createBillSchema,
   recordPurchasePaymentSchema,
@@ -40,6 +42,14 @@ router.post(
   authorize(Role.ADMIN, Role.MANAGER, Role.ACCOUNTANT),
   validate(createPurchaseSchema),
   createPurchase
+);
+
+// Update existing purchase order (Admin, Manager, Accountant)
+router.put(
+  '/:id',
+  authorize(Role.ADMIN, Role.MANAGER, Role.ACCOUNTANT),
+  validate(updatePurchaseSchema),
+  updatePurchase
 );
 
 // Create goods receipt note / GRN (Admin, Manager, Accountant)

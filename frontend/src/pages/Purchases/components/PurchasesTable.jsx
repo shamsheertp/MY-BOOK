@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../../Dashboard/components/StatusBadge';
 
@@ -50,6 +50,7 @@ export function PurchasesTable({
               <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold text-right">Amount</th>
               <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold text-right">Balance</th>
               <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold text-center">Status</th>
+              <th className="px-6 py-4 uppercase tracking-wider text-xs font-bold text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -78,12 +79,24 @@ export function PurchasesTable({
                   <td className="px-6 py-4 text-center">
                     <StatusBadge status={displayStatus} />
                   </td>
+                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    {displayStatus !== 'VOID' && displayStatus !== 'CANCELLED' && (
+                      <button 
+                        type="button"
+                        onClick={() => navigate(`/purchases/${purchase.ref || purchase.id}/edit`)}
+                        className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
+                        title="Edit purchase order"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </td>
                 </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                <td colSpan="7" className="px-6 py-12 text-center text-slate-500">
                   No purchases found matching your criteria.
                 </td>
               </tr>

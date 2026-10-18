@@ -8,11 +8,11 @@ export const createPurchaseItemSchema = z.object({
   id: z.string().optional().nullable(),
   productId: z.string().optional().nullable(),
   name: z.string().min(1, 'Item name or material description is required'),
-  orderedKg: z.union([z.number(), z.string().regex(/^\d+(\.\d+)?$/).transform(Number)]).optional(),
-  unitPrice: z.union([z.number(), z.string().regex(/^\d+(\.\d+)?$/).transform(Number)]).optional(),
-  qty: z.union([z.number(), z.string().regex(/^\d+(\.\d+)?$/).transform(Number)]).optional(),
-  price: z.union([z.number(), z.string().regex(/^\d+(\.\d+)?$/).transform(Number)]).optional(),
-  ordered: z.union([z.number(), z.string().regex(/^\d+(\.\d+)?$/).transform(Number)]).optional(),
+  orderedKg: z.coerce.number().optional(),
+  unitPrice: z.coerce.number().optional(),
+  qty: z.coerce.number().optional(),
+  price: z.coerce.number().optional(),
+  ordered: z.coerce.number().optional(),
 });
 
 export const createPurchaseSchema = z.object({
@@ -29,13 +29,32 @@ export const createPurchaseSchema = z.object({
     (val) => (typeof val === 'string' ? val.toUpperCase() : val),
     z.nativeEnum(PurchaseStatus)
   ).default(PurchaseStatus.ORDERED),
-  discount: z.union([z.number(), z.string().regex(/^\d+(\.\d+)?$/).transform(Number)]).optional().default(0),
-  taxPercent: z.union([z.number(), z.string().regex(/^\d+(\.\d+)?$/).transform(Number)]).optional().default(0),
+  discount: z.coerce.number().optional().default(0),
+  taxPercent: z.coerce.number().optional().default(0),
   notes: z.string().optional().nullable(),
   items: z.array(createPurchaseItemSchema).min(1, 'At least one item is required'),
 }).refine((data) => data.supplierId || (data.supplierName && data.supplierName.trim().length > 0), {
   message: 'Either Supplier ID or Supplier Name must be provided',
   path: ['supplierId'],
+});
+
+export const updatePurchaseSchema = z.object({
+  date: z.string().optional(),
+  expectedDeliveryDate: z.string().optional().nullable(),
+  supplierId: z.string().optional().nullable(),
+  supplierName: z.string().optional().nullable(),
+  supplierCompany: z.string().optional().nullable(),
+  supplierEmail: z.string().email('Invalid email').optional().nullable().or(z.literal('')),
+  supplierPhone: z.string().optional().nullable(),
+  supplierAddress: z.string().optional().nullable(),
+  status: z.preprocess(
+    (val) => (typeof val === 'string' ? val.toUpperCase() : val),
+    z.nativeEnum(PurchaseStatus)
+  ).optional(),
+  discount: z.coerce.number().optional().default(0),
+  taxPercent: z.coerce.number().optional().default(0),
+  notes: z.string().optional().nullable(),
+  items: z.array(createPurchaseItemSchema).min(1, 'At least one item is required'),
 });
 
 export const createReceiptSchema = z.object({
@@ -174,6 +193,32 @@ async function generateNextPaymentRef(): Promise<string> {
 }
 
 /**
+ * Generate next product SKU like PRD-001, PRD-002
+ */
+async function generateNextProductSku(): Promise<string> {
+  const products = await prisma.product.findMany({
+    where: { sku: { startsWith: 'PRD-' } },
+    select: { sku: true },
+  });
+
+  let maxNum = 0;
+  for (const p of products) {
+    if (p.sku) {
+      const match = p.sku.match(/PRD-(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+  }
+
+  const nextNum = maxNum + 1;
+  return `PRD-${nextNum.toString().padStart(3, '0')}`;
+}
+
+/**
  * Enrich purchase for frontend compatibility
  */
 export function enrichPurchase(purchase: any) {
@@ -214,17 +259,44 @@ export function enrichPurchase(purchase: any) {
     date: r.date ? new Date(r.date).toISOString().split('T')[0] : '',
   }));
 
-  const formattedBills = (purchase.bills || []).map((b: any) => ({
-    ...b,
-    amount: Number(b.amount || 0),
-    paid: Number(b.paid || 0),
-    balance: Number(b.balance || 0),
-    date: b.date ? new Date(b.date).toISOString().split('T')[0] : '',
-    dueDate: b.dueDate ? new Date(b.dueDate).toISOString().split('T')[0] : '',
-  }));
+  // Dynamically reconcile bills against active non-voided payments
+  const nonVoidedPayments = (purchase.payments || []).filter((p: any) => !p.voided);
+  const totalPaymentSum = nonVoidedPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+  let availablePaymentPool = totalPaymentSum;
+
+  const formattedBills = (purchase.bills || []).map((b: any) => {
+    const billAmount = Number(b.amount || 0);
+    let billPaid = Number(b.paid || 0);
+    let billBalance = Number(b.balance || 0);
+    let billStatus = (b.status || 'UNPAID').toUpperCase();
+
+    // If bill shows 0 paid in DB but purchase has payments, allocate from available pool
+    if (billPaid === 0 && availablePaymentPool > 0 && billStatus !== 'VOIDED' && billStatus !== 'VOID') {
+      const allocated = Math.min(availablePaymentPool, billAmount);
+      billPaid = allocated;
+      billBalance = Math.max(0, billAmount - allocated);
+      billStatus = billBalance <= 0 ? 'PAID' : 'PARTIAL';
+      availablePaymentPool -= allocated;
+    }
+
+    if (billBalance <= 0 && billAmount > 0) {
+      billStatus = 'PAID';
+    }
+
+    return {
+      ...b,
+      amount: billAmount,
+      paid: billPaid,
+      balance: billBalance,
+      status: billStatus,
+      date: b.date ? new Date(b.date).toISOString().split('T')[0] : '',
+      dueDate: b.dueDate ? new Date(b.dueDate).toISOString().split('T')[0] : '',
+    };
+  });
 
   const formattedPayments = (purchase.payments || []).map((p: any) => ({
     ...p,
+    status: p.voided ? 'Voided' : 'Paid',
     amount: Number(p.amount || 0),
     date: p.date ? new Date(p.date).toISOString().split('T')[0] : '',
   }));
@@ -350,11 +422,14 @@ export async function getPurchases(req: Request, res: Response, next: NextFuncti
  */
 export async function getPurchaseById(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
 
     const purchase = await prisma.purchase.findFirst({
       where: {
-        OR: [{ id }, { ref: id }],
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
       },
       include: {
         supplier: true,
@@ -448,21 +523,70 @@ export async function createPurchase(req: Request, res: Response, next: NextFunc
     }
 
     let subtotal = 0;
-    const lineItemsData = items.map((item: any) => {
+    const lineItemsData = [];
+    for (const item of items) {
       const qty = parseFloat(item.orderedKg ?? item.qty ?? item.ordered) || 1;
       const price = parseFloat(item.unitPrice ?? item.price) || 0;
       const lineTotal = Number((qty * price).toFixed(2));
       subtotal += lineTotal;
-      return {
-        productId: item.productId || null,
-        name: item.name.trim(),
+      const itemName = (item.name || '').trim();
+
+      let linkedProductId = item.productId || null;
+
+      // Automatically save/link product and update quantity/stock in the DB
+      try {
+        let existingProd = null;
+        if (linkedProductId) {
+          existingProd = await prisma.product.findUnique({ where: { id: linkedProductId } });
+        }
+        if (!existingProd && itemName) {
+          existingProd = await prisma.product.findFirst({
+            where: { name: { equals: itemName, mode: 'insensitive' } },
+          });
+        }
+
+        if (existingProd) {
+          linkedProductId = existingProd.id;
+          // Product is in the DB: update cost price and increase stock quantity
+          await prisma.product.update({
+            where: { id: existingProd.id },
+            data: {
+              costPricePerKg: price > 0 ? price : undefined,
+              stockKg: {
+                increment: qty,
+              },
+            },
+          });
+        } else if (itemName) {
+          // Product is not yet in the DB: automatically create product and save quantity
+          const sku = await generateNextProductSku();
+          const newProd = await prisma.product.create({
+            data: {
+              sku,
+              name: itemName,
+              category: 'Raw Material',
+              costPricePerKg: price,
+              sellingPricePerKg: price > 0 ? Number((price * 1.15).toFixed(2)) : 0,
+              stockKg: qty,
+              unit: 'kg',
+            },
+          });
+          linkedProductId = newProd.id;
+        }
+      } catch (prodErr) {
+        console.warn('Auto-save product on purchase error:', prodErr);
+      }
+
+      lineItemsData.push({
+        productId: linkedProductId,
+        name: itemName,
         orderedKg: qty,
         receivedKg: 0,
         billedKg: 0,
         unitPrice: price,
         total: lineTotal,
-      };
-    });
+      });
+    }
 
     const discNum = parseFloat(discount) || 0;
     const taxPctNum = parseFloat(taxPercent) || 0;
@@ -503,12 +627,224 @@ export async function createPurchase(req: Request, res: Response, next: NextFunc
       },
     });
 
-    serverCache.invalidate(['purchases', 'reports', 'ledgers', 'contacts']);
+    serverCache.invalidate(['purchases', 'products', 'reports', 'ledgers', 'contacts']);
 
     res.status(201).json({
       success: true,
       message: `Purchase order ${purchase.ref} created successfully`,
       data: enrichPurchase(purchase),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PUT /api/purchases/:id
+ * Update an existing purchase order:
+ * - Updates supplier, dates, items, discount, tax, notes
+ * - Auto-creates any new products not in DB
+ * - Recalculates subtotal, tax, total, and balance
+ */
+export async function updatePurchase(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = (req.params.id as string)?.trim();
+    let {
+      date,
+      expectedDeliveryDate,
+      supplierId,
+      supplierName,
+      supplierCompany,
+      supplierEmail,
+      supplierPhone,
+      supplierAddress,
+      status,
+      discount = 0,
+      taxPercent = 0,
+      notes,
+      items,
+    } = req.body;
+
+    const purchase = await prisma.purchase.findFirst({
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        items: true,
+        bills: true,
+        payments: true,
+        receipts: true,
+      },
+    });
+
+    if (!purchase) {
+      res.status(404).json({ success: false, message: 'Purchase order not found' });
+      return;
+    }
+
+    if (purchase.status === PurchaseStatus.VOID || purchase.status === PurchaseStatus.CANCELLED) {
+      res.status(400).json({ success: false, message: 'Cannot edit a voided or cancelled purchase order' });
+      return;
+    }
+
+    // Look up supplier contact if supplierId provided
+    if (supplierId) {
+      const contact = await prisma.contact.findFirst({
+        where: { OR: [{ id: supplierId }, { code: supplierId }] },
+      });
+      if (contact) {
+        supplierId = contact.id;
+        supplierName = supplierName || contact.contactName;
+        supplierCompany = supplierCompany || contact.companyName || '';
+        supplierEmail = supplierEmail || contact.email || '';
+        supplierPhone = supplierPhone || contact.phone || '';
+        supplierAddress = supplierAddress || contact.address || '';
+      }
+    }
+
+    let subtotal = 0;
+    const lineItemsData: any[] = [];
+
+    for (const item of items) {
+      const qty = parseFloat(item.orderedKg ?? item.qty ?? item.ordered) || 1;
+      const price = parseFloat(item.unitPrice ?? item.price) || 0;
+      const lineTotal = Number((qty * price).toFixed(2));
+      subtotal += lineTotal;
+      const itemName = (item.name || '').trim();
+
+      let linkedProductId = item.productId || null;
+
+      try {
+        let existingProd = null;
+        if (linkedProductId) {
+          existingProd = await prisma.product.findUnique({ where: { id: linkedProductId } });
+        }
+        if (!existingProd && itemName) {
+          existingProd = await prisma.product.findFirst({
+            where: { name: { equals: itemName, mode: 'insensitive' } },
+          });
+        }
+
+        if (existingProd) {
+          linkedProductId = existingProd.id;
+          await prisma.product.update({
+            where: { id: existingProd.id },
+            data: {
+              costPricePerKg: price > 0 ? price : undefined,
+            },
+          }).catch(() => {});
+        } else if (itemName) {
+          const sku = await generateNextProductSku();
+          const newProd = await prisma.product.create({
+            data: {
+              sku,
+              name: itemName,
+              category: 'Raw Material',
+              costPricePerKg: price,
+              sellingPricePerKg: price > 0 ? Number((price * 1.15).toFixed(2)) : 0,
+              stockKg: qty,
+              unit: 'kg',
+            },
+          });
+          linkedProductId = newProd.id;
+        }
+      } catch (prodErr) {
+        console.warn('Auto-save product on PO edit error:', prodErr);
+      }
+
+      // Preserve receivedKg and billedKg if matching existing item
+      const existingItem = purchase.items.find(
+        (pi) => (item.id && pi.id === item.id) || (itemName && pi.name.toLowerCase() === itemName.toLowerCase())
+      );
+
+      lineItemsData.push({
+        productId: linkedProductId,
+        name: itemName,
+        orderedKg: qty,
+        receivedKg: existingItem ? Number(existingItem.receivedKg) : 0,
+        billedKg: existingItem ? Number(existingItem.billedKg) : 0,
+        unitPrice: price,
+        total: lineTotal,
+      });
+    }
+
+    const discountAmount = Number(discount) || 0;
+    const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+    const taxRate = (Number(taxPercent) || 0) / 100;
+    const taxAmount = Number((discountedSubtotal * taxRate).toFixed(2));
+    const total = Number((discountedSubtotal + taxAmount).toFixed(2));
+    const totalPaid = Number(purchase.paid || 0);
+    const balance = Math.max(0, total - totalPaid);
+
+    let targetStatus = status || purchase.status;
+    if (targetStatus !== PurchaseStatus.DRAFT) {
+      if (balance <= 0 && totalPaid > 0) {
+        targetStatus = PurchaseStatus.COMPLETED;
+      } else {
+        targetStatus = PurchaseStatus.ORDERED;
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Remove old purchase items
+      await tx.purchaseItem.deleteMany({
+        where: { purchaseId: purchase.id },
+      });
+
+      // Insert updated purchase items
+      for (const itemData of lineItemsData) {
+        await tx.purchaseItem.create({
+          data: {
+            purchaseId: purchase.id,
+            ...itemData,
+          },
+        });
+      }
+
+      // Update purchase header
+      await tx.purchase.update({
+        where: { id: purchase.id },
+        data: {
+          date: date ? new Date(date) : purchase.date,
+          expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate) : null,
+          supplierId: supplierId !== undefined ? supplierId : purchase.supplierId,
+          supplierName: supplierName !== undefined ? supplierName : purchase.supplierName,
+          supplierCompany: supplierCompany !== undefined ? supplierCompany : purchase.supplierCompany,
+          supplierEmail: supplierEmail !== undefined ? supplierEmail : purchase.supplierEmail,
+          supplierPhone: supplierPhone !== undefined ? supplierPhone : purchase.supplierPhone,
+          supplierAddress: supplierAddress !== undefined ? supplierAddress : purchase.supplierAddress,
+          status: targetStatus,
+          subtotal,
+          discount: discountAmount,
+          tax: taxAmount,
+          taxPercent: Number(taxPercent) || 0,
+          total,
+          balance,
+          notes: notes !== undefined ? notes : purchase.notes,
+        },
+      });
+    }, { maxWait: 15000, timeout: 30000 });
+
+    const updatedPurchase = await prisma.purchase.findUnique({
+      where: { id: purchase.id },
+      include: {
+        supplier: true,
+        items: { include: { product: true } },
+        receipts: { orderBy: { date: 'desc' } },
+        bills: { orderBy: { date: 'desc' } },
+        payments: { orderBy: { date: 'desc' } },
+      },
+    });
+
+    serverCache.invalidate(['purchases', 'products', 'reports', 'ledgers', 'contacts']);
+
+    res.json({
+      success: true,
+      message: `Purchase order ${purchase.ref} updated successfully`,
+      data: enrichPurchase(updatedPurchase),
     });
   } catch (error) {
     next(error);
@@ -524,11 +860,16 @@ export async function createPurchase(req: Request, res: Response, next: NextFunc
  */
 export async function createReceipt(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
     let { ref, date, notes, items } = req.body;
 
     const purchase = await prisma.purchase.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { items: true },
     });
 
@@ -657,11 +998,16 @@ export async function createReceipt(req: Request, res: Response, next: NextFunct
  */
 export async function voidReceipt(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
-    const receiptId = req.params.receiptId as string;
+    const id = (req.params.id as string)?.trim();
+    const receiptId = (req.params.receiptId as string)?.trim();
 
     const purchase = await prisma.purchase.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { items: true, receipts: true },
     });
 
@@ -670,7 +1016,9 @@ export async function voidReceipt(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    const receipt = purchase.receipts.find((r) => r.id === receiptId || r.ref === receiptId);
+    const receipt = purchase.receipts.find(
+      (r) => r.id === receiptId || (r.ref && r.ref.toLowerCase() === receiptId.toLowerCase())
+    );
     if (!receipt) {
       res.status(404).json({ success: false, message: 'Receipt not found' });
       return;
@@ -743,11 +1091,16 @@ export async function voidReceipt(req: Request, res: Response, next: NextFunctio
  */
 export async function createBill(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
     let { ref, date, dueDate, notes, items } = req.body;
 
     const purchase = await prisma.purchase.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { items: true },
     });
 
@@ -855,11 +1208,16 @@ export async function createBill(req: Request, res: Response, next: NextFunction
  */
 export async function voidBill(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
-    const billId = req.params.billId as string;
+    const id = (req.params.id as string)?.trim();
+    const billId = (req.params.billId as string)?.trim();
 
     const purchase = await prisma.purchase.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { bills: true },
     });
 
@@ -868,7 +1226,9 @@ export async function voidBill(req: Request, res: Response, next: NextFunction) 
       return;
     }
 
-    const bill = purchase.bills.find((b) => b.id === billId || b.ref === billId);
+    const bill = purchase.bills.find(
+      (b) => b.id === billId || (b.ref && b.ref.toLowerCase() === billId.toLowerCase())
+    );
     if (!bill) {
       res.status(404).json({ success: false, message: 'Bill not found' });
       return;
@@ -931,7 +1291,7 @@ export async function voidBill(req: Request, res: Response, next: NextFunction) 
  */
 export async function recordPayment(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
     let { amount, date, method, ref, billId, notes, image } = req.body;
 
     const paymentAmount = Number(amount);
@@ -941,7 +1301,12 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
     }
 
     const purchase = await prisma.purchase.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { bills: true },
     });
 
@@ -955,10 +1320,16 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // Find candidate bill to link
+      let targetBill = billId ? purchase.bills.find((b) => b.id === billId || b.ref === billId) : null;
+      if (!targetBill && purchase.bills.length > 0) {
+        targetBill = purchase.bills.find((b) => b.status !== 'Voided' && b.status !== 'VOID' && Number(b.balance) > 0) || purchase.bills[0];
+      }
+
       const payment = await tx.purchasePayment.create({
         data: {
           purchaseId: purchase.id,
-          billId: billId || null,
+          billId: targetBill?.id || null,
           ref,
           date: date ? new Date(date) : new Date(),
           amount: paymentAmount,
@@ -984,22 +1355,33 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
         }).catch(() => {});
       }
 
-      // If linked bill exists, update bill
-      if (billId) {
-        const targetBill = purchase.bills.find((b) => b.id === billId || b.ref === billId);
-        if (targetBill) {
-          const newBillPaid = Number(targetBill.paid) + paymentAmount;
-          const newBillBalance = Math.max(0, Number(targetBill.amount) - newBillPaid);
+      // Automatically allocate payment amount across bills (FIFO / prioritized targetBill)
+      if (purchase.bills.length > 0) {
+        let remainingToApply = paymentAmount;
+        const billsToProcess = targetBill
+          ? [targetBill, ...purchase.bills.filter(b => b.id !== targetBill.id && b.status !== 'Voided' && b.status !== 'VOID')]
+          : purchase.bills.filter(b => b.status !== 'Voided' && b.status !== 'VOID');
+
+        for (const b of billsToProcess) {
+          if (remainingToApply <= 0) break;
+          const currentBillBal = Math.max(0, Number(b.amount) - Number(b.paid));
+          if (currentBillBal <= 0) continue;
+
+          const applyAmt = Math.min(remainingToApply, currentBillBal);
+          const newBillPaid = Number(b.paid) + applyAmt;
+          const newBillBalance = Math.max(0, Number(b.amount) - newBillPaid);
           const newBillStatus = newBillBalance <= 0 ? 'PAID' : 'PARTIAL';
 
           await tx.purchaseBill.update({
-            where: { id: targetBill.id },
+            where: { id: b.id },
             data: {
               paid: newBillPaid,
               balance: newBillBalance,
               status: newBillStatus,
             },
           });
+
+          remainingToApply -= applyAmt;
         }
       }
 
@@ -1050,11 +1432,16 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
  */
 export async function voidPayment(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
-    const paymentId = req.params.paymentId as string;
+    const id = (req.params.id as string)?.trim();
+    const paymentId = (req.params.paymentId as string)?.trim();
 
     const purchase = await prisma.purchase.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { payments: true },
     });
 
@@ -1063,7 +1450,9 @@ export async function voidPayment(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    const payment = purchase.payments.find((p) => p.id === paymentId || p.ref === paymentId);
+    const payment = purchase.payments.find(
+      (p) => p.id === paymentId || (p.ref && p.ref.toLowerCase() === paymentId.toLowerCase())
+    );
     if (!payment) {
       res.status(404).json({ success: false, message: 'Payment record not found' });
       return;
@@ -1095,6 +1484,25 @@ export async function voidPayment(req: Request, res: Response, next: NextFunctio
             },
           },
         }).catch(() => {});
+      }
+
+      // Reverse bill settlement if payment was linked to a bill
+      if (payment.billId) {
+        const linkedBill = await tx.purchaseBill.findUnique({ where: { id: payment.billId } });
+        if (linkedBill) {
+          const reversedPaid = Math.max(0, Number(linkedBill.paid) - voidedAmount);
+          const reversedBalance = Math.max(0, Number(linkedBill.amount) - reversedPaid);
+          const reversedStatus = reversedPaid <= 0 ? 'UNPAID' : (reversedBalance <= 0 ? 'PAID' : 'PARTIAL');
+
+          await tx.purchaseBill.update({
+            where: { id: linkedBill.id },
+            data: {
+              paid: reversedPaid,
+              balance: reversedBalance,
+              status: reversedStatus,
+            },
+          });
+        }
       }
 
       await tx.purchase.update({
@@ -1140,11 +1548,16 @@ export async function voidPayment(req: Request, res: Response, next: NextFunctio
  */
 export async function voidPurchase(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
     const { reason = '' } = req.body || {};
 
     const purchase = await prisma.purchase.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: {
         items: true,
         receipts: true,
@@ -1260,10 +1673,15 @@ export async function voidPurchase(req: Request, res: Response, next: NextFuncti
  */
 export async function deletePurchase(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
 
     const purchase = await prisma.purchase.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { bills: true },
     });
 

@@ -453,16 +453,13 @@ export default function Contacts() {
                           >
                             {row.name}
                           </Link>
-                          <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                            <span className="font-mono text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                              {row.code}
-                            </span>
-                            {row.email && (
-                              <span className="flex items-center truncate max-w-[160px]">
+                          {row.email && (
+                            <div className="flex items-center text-xs text-slate-400 mt-0.5">
+                              <span className="flex items-center truncate max-w-[180px]">
                                 <Mail className="w-3 h-3 mr-1 shrink-0" /> {row.email}
                               </span>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>

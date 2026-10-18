@@ -381,6 +381,11 @@ export const contactsService = {
     return res.data;
   },
 
+  async getTransactions(id) {
+    const res = await api.get(`/contacts/${id}/transactions`);
+    return res.data;
+  },
+
   async create(contactData) {
     const res = await api.post('/contacts', contactData);
     return res.data;
@@ -524,6 +529,15 @@ export const purchasesService = {
 
   async create(purchaseData) {
     const res = await api.post('/purchases', purchaseData);
+    clearApiCache('products');
+    clearApiCache('purchases');
+    return res.data;
+  },
+
+  async update(id, purchaseData) {
+    const res = await api.put(`/purchases/${id}`, purchaseData);
+    clearApiCache('products');
+    clearApiCache('purchases');
     return res.data;
   },
 

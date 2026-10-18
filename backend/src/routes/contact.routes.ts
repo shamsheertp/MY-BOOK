@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getContacts,
   getContactById,
+  getContactTransactions,
   createContact,
   updateContact,
   deleteContact,
@@ -21,6 +22,9 @@ router.use(authenticate);
 
 // Get all contacts (All authenticated users can view, cached with 45s TTL)
 router.get('/', cacheResponse('contacts', 45000), getContacts);
+
+// Get all transactions for a contact (sales, purchases, payments, bills, expenses)
+router.get('/:id/transactions', cacheResponse('contacts', 15000), getContactTransactions);
 
 // Get contact by ID or code
 router.get('/:id', cacheResponse('contacts', 45000), getContactById);

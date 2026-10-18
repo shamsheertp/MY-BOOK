@@ -126,6 +126,7 @@ function App() {
                 <Route path="/sales/:id" element={<SaleDetails />} />
                 <Route path="/purchases" element={<Purchases />} />
                 <Route path="/purchases/new" element={<CreatePurchase />} />
+                <Route path="/purchases/:id/edit" element={<CreatePurchase />} />
                 <Route path="/purchases/receipts/new" element={<CreateGRN />} />
                 <Route path="/purchases/receipts/:id" element={<GRNDetails />} />
                 <Route path="/purchases/bills/new" element={<CreatePurchaseBill />} />

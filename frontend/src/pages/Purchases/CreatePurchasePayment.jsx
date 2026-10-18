@@ -16,6 +16,7 @@ export default function CreatePurchasePayment() {
   const [paymentMode, setPaymentMode] = useState('Bank Transfer');
   const [reference, setReference] = useState('');
   const [paymentAmount, setPaymentAmount] = useState(0);
+  const [selectedBillId, setSelectedBillId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -28,6 +29,12 @@ export default function CreatePurchasePayment() {
           setPurchase(res.data);
           const outstanding = Number(res.data.balance ?? 0);
           setPaymentAmount(outstanding);
+          // If there is an unpaid bill, preselect it
+          const bills = res.data.bills || [];
+          const unpaid = bills.find((b) => Number(b.balance) > 0 || (b.status || '').toUpperCase() === 'UNPAID');
+          if (unpaid) {
+            setSelectedBillId(unpaid.id);
+          }
         }
       })
       .catch((err) => {
@@ -48,7 +55,7 @@ export default function CreatePurchasePayment() {
   const allBills = (purchase.bills || []).filter(b => b.status !== 'Voided');
   const allPayments = (purchase.payments || []).filter(p => p.status !== 'Voided');
 
-  const { billsWithBalance, totalPayable } = useMemo(() => {
+  const { billsWithBalance, unpaidBills, totalPayable } = useMemo(() => {
     const totalBalanceFromPurchase = Number(purchase.balance ?? 0);
 
     const _billsWithBalance = allBills.map(b => {
@@ -70,6 +77,13 @@ export default function CreatePurchasePayment() {
     };
   }, [allBills, purchase.balance]);
 
+  // Sync default selectedBillId if unset
+  useEffect(() => {
+    if (!selectedBillId && unpaidBills.length > 0) {
+      setSelectedBillId(unpaidBills[0].id);
+    }
+  }, [unpaidBills, selectedBillId]);
+
   // Sync default payment amount if totalPayable updates
   useEffect(() => {
     if (paymentAmount === 0 && totalPayable > 0) {
@@ -87,11 +101,14 @@ export default function CreatePurchasePayment() {
 
     setIsSubmitting(true);
     try {
+      const targetBillId = selectedBillId || (unpaidBills.length > 0 ? unpaidBills[0].id : undefined);
+
       const payload = {
         amount: amt,
         method: paymentMode,
         ref: reference.trim() || undefined,
         date: paymentDate,
+        billId: targetBillId || undefined,
       };
 
       const res = await purchasesService.recordPayment(purchase.id || purchase.ref, payload);
@@ -248,18 +265,45 @@ export default function CreatePurchasePayment() {
                 <h4 className="font-bold text-slate-800 text-sm mb-4 uppercase tracking-wider">Purchase Bills to Settle</h4>
                 <div className="space-y-3">
                   {billsWithBalance.length > 0 ? (
-                    billsWithBalance.map((bill) => (
-                      <div key={bill.id} className="flex justify-between items-center text-sm p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
-                        <div>
-                          <div className="font-bold text-slate-800">{bill.ref || bill.id}</div>
-                          <div className="text-xs text-slate-400">{bill.date}</div>
+                    billsWithBalance.map((bill) => {
+                      const isSelected = selectedBillId === bill.id;
+                      return (
+                        <div
+                          key={bill.id}
+                          onClick={() => {
+                            setSelectedBillId(bill.id);
+                            if (bill.balance > 0) {
+                              setPaymentAmount(bill.balance);
+                            }
+                          }}
+                          className={`flex justify-between items-center text-sm p-3.5 rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-500/20 shadow-sm'
+                              : 'bg-white border-slate-100 hover:border-slate-200 shadow-sm'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`font-bold ${isSelected ? 'text-emerald-800' : 'text-slate-800'}`}>
+                                {bill.ref || bill.id}
+                              </span>
+                              {isSelected && (
+                                <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-600 text-white rounded-md uppercase">
+                                  Selected
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-0.5">{bill.date}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-slate-800">{formatCurrency(bill.amount)}</div>
+                            <div className={`text-xs font-semibold ${bill.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                              {bill.balance > 0 ? `Balance: ${formatCurrency(bill.balance)}` : 'Fully Paid'}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <div className="font-bold text-slate-800">{formatCurrency(bill.amount)}</div>
-                          <div className="text-xs font-semibold text-rose-600">Balance: {formatCurrency(bill.balance)}</div>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="text-sm text-slate-500 italic p-3 bg-white rounded-xl border border-slate-100">
                       Direct PO payment against total order amount ({formatCurrency(purchase.balance || purchase.total)}).

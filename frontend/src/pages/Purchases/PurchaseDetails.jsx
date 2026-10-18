@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Send, PackagePlus, FileText, CheckCircle2, IndianRupee, Ban, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Printer, Send, PackagePlus, FileText, CheckCircle2, IndianRupee, Ban, AlertCircle, Edit3 } from 'lucide-react';
 import { purchasesService } from '../../services/api';
 import purchasesData from '../../db/purchases.json';
 import { StatusBadge } from '../Dashboard/components/StatusBadge';
@@ -24,7 +24,7 @@ export default function PurchaseDetails() {
 
   // Initial purchase state fallback
   const [purchase, setPurchase] = useState(() => {
-    return purchasesData.find(p => p.ref === id || p.id?.toString() === id) || purchasesData[0] || {};
+    return purchasesData.find(p => p.ref === id || p.id?.toString() === id) || null;
   });
 
   const loadPurchase = useCallback(async () => {
@@ -47,6 +47,28 @@ export default function PurchaseDetails() {
   useEffect(() => {
     loadPurchase();
   }, [loadPurchase]);
+
+  if (isLoading && !purchase) {
+    return (
+      <div className="max-w-5xl mx-auto p-12 text-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+        <p className="text-slate-500 font-medium">Loading purchase order details...</p>
+      </div>
+    );
+  }
+
+  if (!purchase) {
+    return (
+      <div className="max-w-5xl mx-auto p-12 text-center bg-white rounded-3xl border border-slate-200">
+        <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
+        <h2 className="text-xl font-bold text-slate-800">Purchase Order Not Found</h2>
+        <p className="text-slate-500 mt-1">The purchase order "{id}" could not be found.</p>
+        <button onClick={() => navigate('/purchases')} className="mt-4 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl">
+          Back to Purchases
+        </button>
+      </div>
+    );
+  }
 
   // Supplier info
   const supplier = purchase.supplier || {
@@ -71,8 +93,12 @@ export default function PurchaseDetails() {
     const price = Number(item.unitPrice ?? item.price ?? 0);
     return acc + (qty * price);
   }, 0));
-  const tax = Number(purchase.tax ?? (subtotal * 0.05));
-  const total = Number(purchase.total ?? purchase.amount ?? (subtotal + tax));
+  const discount = Number(purchase.discount || 0);
+  const taxPercent = Number(purchase.taxPercent ?? 0);
+  const tax = Number(purchase.tax ?? ((Math.max(0, subtotal - discount) * taxPercent) / 100));
+  const total = Number(purchase.total ?? purchase.amount ?? Math.max(0, subtotal - discount + tax));
+  const paid = Number(purchase.paid || 0);
+  const balance = Number(purchase.balance ?? Math.max(0, total - paid));
 
   const handlePrint = () => {
     window.print();
@@ -88,9 +114,10 @@ export default function PurchaseDetails() {
 
   const handleVoidReceipt = (receiptId, e) => {
     e.stopPropagation();
+    const poRef = purchase?.ref || id || purchase?.id;
     setPendingAction(() => async () => {
       try {
-        const res = await purchasesService.voidReceipt(purchase.id || purchase.ref, receiptId);
+        const res = await purchasesService.voidReceipt(poRef, receiptId);
         if (res?.success) {
           setFeedback({ type: 'success', text: 'Receipt voided successfully and inventory reverted.' });
           loadPurchase();
@@ -105,9 +132,10 @@ export default function PurchaseDetails() {
 
   const handleVoidBill = (billId, e) => {
     e.stopPropagation();
+    const poRef = purchase?.ref || id || purchase?.id;
     setPendingAction(() => async () => {
       try {
-        const res = await purchasesService.voidBill(purchase.id || purchase.ref, billId);
+        const res = await purchasesService.voidBill(poRef, billId);
         if (res?.success) {
           setFeedback({ type: 'success', text: 'Bill voided successfully and payables adjusted.' });
           loadPurchase();
@@ -122,9 +150,10 @@ export default function PurchaseDetails() {
 
   const handleVoidPayment = (paymentId, e) => {
     e.stopPropagation();
+    const poRef = purchase?.ref || id || purchase?.id;
     setPendingAction(() => async () => {
       try {
-        const res = await purchasesService.voidPayment(purchase.id || purchase.ref, paymentId);
+        const res = await purchasesService.voidPayment(poRef, paymentId);
         if (res?.success) {
           setFeedback({ type: 'success', text: 'Payment voided successfully.' });
           loadPurchase();
@@ -138,9 +167,10 @@ export default function PurchaseDetails() {
   };
 
   const handleVoidPurchase = () => {
+    const poRef = purchase?.ref || id || purchase?.id;
     setPendingAction(() => async () => {
       try {
-        const res = await purchasesService.void(purchase.id || purchase.ref, { reason: 'Voided by authorized manager' });
+        const res = await purchasesService.void(poRef, { reason: 'Voided by authorized manager' });
         if (res?.success) {
           setFeedback({ type: 'success', text: 'Purchase order voided. All received stock and payables have been reversed.' });
           loadPurchase();
@@ -193,7 +223,11 @@ export default function PurchaseDetails() {
   const billsList = purchase.bills || [];
   const hasBills = billsList.length > 0;
 
-  const unpaidBills = billsList.filter(b => b.status === 'Unpaid' || b.status === 'Partially Paid' || (b.balance > 0));
+  const unpaidBills = billsList.filter((b) => {
+    const s = (b.status || '').toUpperCase();
+    if (s === 'VOID' || s === 'VOIDED') return false;
+    return s === 'UNPAID' || s.includes('PARTIAL') || Number(b.balance || 0) > 0;
+  });
   const canPay = !isVoid && (unpaidBills.length > 0 || Number(purchase.balance ?? 0) > 0);
   const paymentsList = purchase.payments || [];
   const hasPayments = paymentsList.length > 0;
@@ -224,6 +258,17 @@ export default function PurchaseDetails() {
         </div>
         
         <div className="flex items-center space-x-3">
+          {!isVoid && (
+            <button 
+              onClick={() => navigate(`/purchases/${purchase.ref || id}/edit`)}
+              className="px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold rounded-xl transition-colors shadow-sm flex items-center text-sm"
+              title="Edit this purchase order"
+            >
+              <Edit3 className="w-4 h-4 mr-1.5" />
+              Edit PO
+            </button>
+          )}
+
           {!isVoid && (
             <button 
               onClick={handleVoidPurchase}
@@ -334,26 +379,29 @@ export default function PurchaseDetails() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 bg-white">
-                  {receiptsList.map((receipt) => (
-                    <tr key={receipt.id} className={`hover:bg-slate-50 transition-colors ${receipt.status === 'Voided' ? 'opacity-50 grayscale' : ''}`}>
-                      <td className="py-3 px-6 font-bold text-orange-600 hover:text-orange-700">{receipt.ref || receipt.id}</td>
-                      <td className="py-3 px-6 text-slate-600 font-medium">{receipt.date}</td>
-                      <td className="py-3 px-6 text-center font-bold text-slate-800">{receipt.itemsReceived} kg</td>
-                      <td className="py-3 px-6 text-right">
-                        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${receipt.status === 'Voided' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {receipt.status !== 'Voided' && <CheckCircle2 className="w-3.5 h-3.5 mr-1" />}
-                          {receipt.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-6 text-right">
-                        {receipt.status !== 'Voided' && !isVoid && (
-                          <button onClick={(e) => handleVoidReceipt(receipt.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Void Receipt">
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {receiptsList.map((receipt) => {
+                    const isReceiptVoid = (receipt.status || '').toUpperCase() === 'VOIDED' || (receipt.status || '').toUpperCase() === 'VOID';
+                    return (
+                      <tr key={receipt.id} className={`hover:bg-slate-50 transition-colors ${isReceiptVoid ? 'opacity-50 grayscale' : ''}`}>
+                        <td className="py-3 px-6 font-bold text-orange-600 hover:text-orange-700">{receipt.ref || receipt.id}</td>
+                        <td className="py-3 px-6 text-slate-600 font-medium">{receipt.date}</td>
+                        <td className="py-3 px-6 text-center font-bold text-slate-800">{receipt.itemsReceived} kg</td>
+                        <td className="py-3 px-6 text-right">
+                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${isReceiptVoid ? 'bg-slate-100 text-slate-500 line-through' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {!isReceiptVoid && <CheckCircle2 className="w-3.5 h-3.5 mr-1" />}
+                            {receipt.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-6 text-right">
+                          {!isReceiptVoid && !isVoid && (
+                            <button onClick={(e) => handleVoidReceipt(receipt.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Void Receipt">
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -422,17 +470,35 @@ export default function PurchaseDetails() {
                         )}
                       </td>
                       <td className="py-4 px-6 text-right">
-                        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${
-                          bill.status === 'Voided' ? 'bg-slate-100 text-slate-500' :
-                          bill.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
-                          bill.status === 'Partially Paid' ? 'bg-amber-100 text-amber-700' :
-                          'bg-amber-50 text-amber-700'
-                        }`}>
-                          {bill.status}
-                        </span>
+                        {(() => {
+                          const statusUpper = (bill.status || '').toUpperCase();
+                          const isPaid = Number(bill.balance || 0) <= 0 || statusUpper === 'PAID';
+                          const isPartial = !isPaid && (Number(bill.paid || 0) > 0 || statusUpper.includes('PARTIAL'));
+                          const isVoided = statusUpper === 'VOID' || statusUpper === 'VOIDED';
+
+                          let badgeClass = 'bg-rose-50 text-rose-700 border border-rose-200';
+                          let label = 'Unpaid';
+
+                          if (isVoided) {
+                            badgeClass = 'bg-slate-100 text-slate-500';
+                            label = 'Voided';
+                          } else if (isPaid) {
+                            badgeClass = 'bg-emerald-100 text-emerald-700';
+                            label = 'Paid';
+                          } else if (isPartial) {
+                            badgeClass = 'bg-amber-100 text-amber-700';
+                            label = 'Partially Paid';
+                          }
+
+                          return (
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold ${badgeClass}`}>
+                              {label}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-4 px-6 text-right">
-                        {bill.status !== 'Voided' && !isVoid && (
+                        {bill.status !== 'Voided' && bill.status !== 'VOID' && !isVoid && (
                           <button onClick={(e) => handleVoidBill(bill.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Void Bill">
                             <Ban className="w-4 h-4" />
                           </button>
@@ -441,30 +507,33 @@ export default function PurchaseDetails() {
                     </tr>
                   ))}
 
-                  {paymentsList.map((payment) => (
-                    <tr key={payment.id} className={`hover:bg-slate-50 transition-colors bg-emerald-50/20 ${payment.status === 'Voided' ? 'opacity-50 line-through' : ''}`}>
-                      <td className="py-4 px-6 text-slate-600 font-medium">{payment.date}</td>
-                      <td className="py-4 px-6">
-                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-emerald-50 text-emerald-700">
-                          Payment Out
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 font-bold text-emerald-600">{payment.ref || payment.id}</td>
-                      <td className="py-4 px-6 text-right font-black text-emerald-700">
-                        -{formatCurrency(payment.amount)}
-                      </td>
-                      <td className="py-4 px-6 text-right text-xs font-medium text-slate-600">
-                        {payment.status === 'Voided' ? 'Voided' : (payment.method || payment.mode || 'Paid')}
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        {payment.status !== 'Voided' && !isVoid && (
-                          <button onClick={(e) => handleVoidPayment(payment.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Void Payment">
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {paymentsList.map((payment) => {
+                    const isPaymentVoid = payment.voided || (payment.status || '').toUpperCase() === 'VOIDED' || (payment.status || '').toUpperCase() === 'VOID';
+                    return (
+                      <tr key={payment.id} className={`hover:bg-slate-50 transition-colors bg-emerald-50/20 ${isPaymentVoid ? 'opacity-50 line-through' : ''}`}>
+                        <td className="py-4 px-6 text-slate-600 font-medium">{payment.date}</td>
+                        <td className="py-4 px-6">
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-emerald-50 text-emerald-700">
+                            Payment Out
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 font-bold text-emerald-600">{payment.ref || payment.id}</td>
+                        <td className="py-4 px-6 text-right font-black text-emerald-700">
+                          -{formatCurrency(payment.amount)}
+                        </td>
+                        <td className="py-4 px-6 text-right text-xs font-medium text-slate-600">
+                          {isPaymentVoid ? 'Voided' : (payment.method || payment.mode || 'Paid')}
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          {!isPaymentVoid && !isVoid && (
+                            <button onClick={(e) => handleVoidPayment(payment.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Void Payment">
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -598,8 +667,14 @@ export default function PurchaseDetails() {
                 <span className="font-medium">Subtotal</span>
                 <span className="font-bold text-slate-800">{formatCurrency(subtotal)}</span>
               </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-slate-600">
+                  <span className="font-medium">Discount</span>
+                  <span className="font-bold text-emerald-600">- {formatCurrency(discount)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-600">
-                <span className="font-medium">Tax ({Number(purchase.taxPercent || 5)}%)</span>
+                <span className="font-medium">Tax ({taxPercent}%)</span>
                 <span className="font-bold text-slate-800">{formatCurrency(tax)}</span>
               </div>
               <div className="pt-3 border-t-2 border-slate-200 flex justify-between items-center">
@@ -608,11 +683,11 @@ export default function PurchaseDetails() {
               </div>
               <div className="flex justify-between text-sm text-slate-600 pt-2 border-t border-slate-100">
                 <span>Amount Paid:</span>
-                <span className="font-bold text-emerald-600">{formatCurrency(purchase.paid || 0)}</span>
+                <span className="font-bold text-emerald-600">{formatCurrency(paid)}</span>
               </div>
               <div className="flex justify-between text-sm text-slate-600">
                 <span>Balance Due:</span>
-                <span className="font-bold text-rose-600">{formatCurrency(purchase.balance || 0)}</span>
+                <span className="font-bold text-rose-600">{formatCurrency(balance)}</span>
               </div>
             </div>
           </div>

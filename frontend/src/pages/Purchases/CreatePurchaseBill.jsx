@@ -120,7 +120,7 @@ export default function CreatePurchaseBill() {
   };
 
   const currentSubtotal = items.reduce((acc, item) => acc + ((Number(item.toBill) || 0) * (Number(item.price) || 0)), 0);
-  const taxRate = Number(purchase.taxPercent || 5) / 100;
+  const taxRate = Number(purchase.taxPercent || 0) / 100;
   const tax = currentSubtotal * taxRate;
   const currentTotal = currentSubtotal + tax;
 
@@ -265,7 +265,7 @@ export default function CreatePurchaseBill() {
                 <span className="font-bold text-slate-800">{formatCurrency(currentSubtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span className="font-medium">Tax ({Number(purchase.taxPercent || 5)}%)</span>
+                <span className="font-medium">Tax ({Number(purchase.taxPercent || 0)}%)</span>
                 <span className="font-bold text-slate-800">{formatCurrency(tax)}</span>
               </div>
               <div className="pt-3 border-t-2 border-slate-200 flex justify-between items-center">

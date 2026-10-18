@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { ArrowLeft, Plus, Trash2, Calendar, FileText, User, Package, AlertCircle, Save, X, ChevronDown } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { contactsService, productsService, salesService, tokenStorage } from '../../services/api';
 import { CustomerModal } from '../Contacts/components/CustomerModal';
 import { CompactContactSelector } from '../../components/Common/CompactContactSelector';
@@ -248,6 +248,9 @@ const LineItemRow = memo(function LineItemRow({
 
 export default function CreateInvoice() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const preselectedContact = location.state?.preselectedContact;
+
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [contacts, setContacts] = useState([]);
   const [products, setProducts] = useState([]);
@@ -261,12 +264,12 @@ export default function CreateInvoice() {
   };
 
   const [invoice, setInvoice] = useState(() => ({
-    customerId: '',
-    customerName: '',
-    customerCompany: '',
-    customerEmail: '',
-    customerPhone: '',
-    customerAddress: '',
+    customerId: preselectedContact?.id || '',
+    customerName: preselectedContact?.contactName || '',
+    customerCompany: preselectedContact?.companyName || '',
+    customerEmail: preselectedContact?.email || '',
+    customerPhone: preselectedContact?.phone || '',
+    customerAddress: preselectedContact?.address || '',
     ref: generateInvoiceRef(),
     date: new Date().toISOString().split('T')[0],
     dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],

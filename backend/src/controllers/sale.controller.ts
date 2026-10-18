@@ -247,13 +247,13 @@ export async function getSales(req: Request, res: Response, next: NextFunction) 
  */
 export async function getSaleById(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
 
     const sale = await prisma.sale.findFirst({
       where: {
         OR: [
           { id },
-          { ref: id },
+          { ref: { equals: id, mode: 'insensitive' } },
         ],
       },
       include: {
@@ -449,7 +449,7 @@ export async function createSale(req: Request, res: Response, next: NextFunction
  */
 export async function recordPayment(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
     const { amount, date, method, notes, image } = req.body;
     let { ref } = req.body;
 
@@ -464,7 +464,10 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
 
     const sale = await prisma.sale.findFirst({
       where: {
-        OR: [{ id }, { ref: id }],
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
       },
       include: {
         payments: true,
@@ -560,11 +563,16 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
  */
 export async function voidPayment(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
-    const paymentId = req.params.paymentId as string;
+    const id = (req.params.id as string)?.trim();
+    const paymentId = (req.params.paymentId as string)?.trim();
 
     const sale = await prisma.sale.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { payments: true },
     });
 
@@ -573,7 +581,7 @@ export async function voidPayment(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    const payment = sale.payments.find(p => p.id === paymentId || p.ref === paymentId);
+    const payment = sale.payments.find(p => p.id === paymentId || (p.ref && p.ref.toLowerCase() === paymentId.toLowerCase()));
     if (!payment) {
       res.status(404).json({ success: false, message: 'Payment record not found' });
       return;
@@ -653,10 +661,15 @@ export async function voidPayment(req: Request, res: Response, next: NextFunctio
  */
 export async function deleteSale(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
 
     const sale = await prisma.sale.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: { items: true },
     });
 
@@ -705,11 +718,16 @@ export async function deleteSale(req: Request, res: Response, next: NextFunction
  */
 export async function voidSale(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id as string;
+    const id = (req.params.id as string)?.trim();
     const { reason = '' } = req.body || {};
 
     const sale = await prisma.sale.findFirst({
-      where: { OR: [{ id }, { ref: id }] },
+      where: {
+        OR: [
+          { id },
+          { ref: { equals: id, mode: 'insensitive' } },
+        ],
+      },
       include: {
         items: true,
         payments: true,
